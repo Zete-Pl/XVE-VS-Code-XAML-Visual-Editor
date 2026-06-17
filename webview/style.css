@@ -213,11 +213,44 @@ body {
   display: flex;
   flex-direction: column;
   margin-bottom: 8px;
+  padding-left: 6px;
+  border-left: 2px solid transparent;
+}
+.field.changed {
+  border-left-color: var(--vscode-editorWarning-foreground, #cca700);
+}
+.field-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
 }
 .field-name {
   font-size: 11px;
   opacity: 0.8;
-  margin-bottom: 2px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.field.changed .field-name {
+  opacity: 1;
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
+.field-btn {
+  background: transparent;
+  border: none;
+  color: var(--vscode-icon-foreground, inherit);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 3px;
+  opacity: 0.6;
+  border-radius: 3px;
+}
+.field-btn:hover {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground, #ffffff22);
 }
 .field-input {
   background: var(--vscode-input-background);
@@ -225,6 +258,27 @@ body {
   border: 1px solid var(--vscode-input-border, transparent);
   padding: 3px 6px;
   font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.field-brush {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.field-swatch {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--vscode-input-border, #0003);
+  background: transparent;
+  flex: none;
+  cursor: pointer;
+}
+.field-add {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--vscode-panel-border);
 }
 .empty {
   padding: 10px;

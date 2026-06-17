@@ -33,12 +33,16 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
 
     const post = (msg: unknown) => panel.webview.postMessage(msg);
 
+    // baseline = ostatnio zapisana zawartość (przy otwarciu == zawartość na dysku)
+    let baselineText = document.getText();
+
     const sendDoc = () => {
       const doc = new XamlDocument(document.getText());
       post({
         type: "doc",
         tree: doc.toTree(),
-        source: document.getText(),
+        changed: this.changedAttributes(baselineText, document.getText()),
+        dirty: document.isDirty,
         fileName: document.fileName,
       });
     };
@@ -46,7 +50,16 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() === document.uri.toString()) sendDoc();
     });
-    panel.onDidDispose(() => changeSub.dispose());
+    const saveSub = vscode.workspace.onDidSaveTextDocument((d) => {
+      if (d.uri.toString() === document.uri.toString()) {
+        baselineText = document.getText();
+        sendDoc();
+      }
+    });
+    panel.onDidDispose(() => {
+      changeSub.dispose();
+      saveSub.dispose();
+    });
 
     panel.webview.onDidReceiveMessage(async (msg: any) => {
       switch (msg?.type) {
@@ -59,20 +72,49 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           sendDoc();
           break;
         case "setAttribute":
-          await this.applyAttribute(document, msg.id, msg.name, msg.value);
+          await this.applyEdit(document, (doc) => doc.setAttribute(msg.id, msg.name, msg.value));
+          break;
+        case "removeAttribute":
+          await this.applyEdit(document, (doc) => doc.removeAttribute(msg.id, msg.name));
           break;
       }
     });
   }
 
-  private async applyAttribute(
+  /** Mapa id → { atrybut: wartośćBaseline | null }. null = atrybut dodany (brak w baseline). */
+  private changedAttributes(
+    baselineText: string,
+    currentText: string
+  ): Record<number, Record<string, string | null>> {
+    if (baselineText === currentText) return {};
+    const base = new XamlDocument(baselineText);
+    const cur = new XamlDocument(currentText);
+    const out: Record<number, Record<string, string | null>> = {};
+    const walk = (id: number) => {
+      const node = cur.getNode(id);
+      if (!node || node.kind !== "element") return;
+      const baseNode = base.getNode(id);
+      for (const a of node.attributes) {
+        const baseAttr = baseNode?.attributes.find((b) => b.name === a.name);
+        if (!baseNode || baseAttr === undefined) {
+          (out[id] ??= {})[a.name] = null;
+        } else if (baseAttr.value !== a.value) {
+          (out[id] ??= {})[a.name] = baseAttr.value;
+        }
+      }
+      for (const c of node.children) walk(c.id);
+    };
+    if (cur.root) walk(cur.root.id);
+    return out;
+  }
+
+  /** Aplikuje chirurgiczną mutację na świeżym XamlDocument i zapisuje jako WorkspaceEdit. */
+  private async applyEdit(
     document: vscode.TextDocument,
-    id: number,
-    name: string,
-    value: string
+    mutate: (doc: XamlDocument) => boolean
   ): Promise<void> {
     const doc = new XamlDocument(document.getText());
-    if (!doc.setAttribute(id, name, value)) return;
+    if (!mutate(doc)) return;
     const newText = doc.getText();
     if (newText === document.getText()) return;
 

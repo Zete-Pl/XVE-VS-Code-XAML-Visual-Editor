@@ -6,7 +6,7 @@ edycja zmienia wyłącznie to, co trzeba, a reszta pliku pozostaje bajt-w-bajt n
 
 > Osobne repozytorium. Aplikacja WPF służy jako referencja zachowań, nie współdzielimy kodu.
 
-## Status — Etap 1 (podgląd web + selekcja)
+## Status — Etap 2 (typowany panel właściwości)
 
 Zrobione:
 - Custom Text Editor dla `*.xaml` (webview: drzewo struktury, podgląd, panel właściwości).
@@ -15,9 +15,12 @@ Zrobione:
   TextBlock/Button/TextBox/CheckBox/RadioButton/Slider/ProgressBar/Image/Ellipse/Rectangle;
   nieznane typy → placeholder. Pozycjonowanie wg Margin/Alignment/Canvas.*, kolory `#AARRGGBB`.
 - **Dwukierunkowa selekcja**: klik w podglądzie ↔ podświetlenie w drzewie + nakładka zaznaczenia.
-- Port lokalizacji (7 języków, `[en, pl, es, de, fr, ja, zh]`), podzbiór kluczy.
-- Edycja wartości atrybutu w panelu → zapis przez `WorkspaceEdit` (natywne undo/redo).
-- Testy round-trip / surgical-save + konwersji kolorów (`npm run test:unit`).
+- **Typowany panel właściwości** (`TypeRegistry`): bool→select, enum→lista, brush→próbnik koloru,
+  number/thickness/string→pole; **dodawanie** (lista znanych właściwości) i **usuwanie** atrybutów;
+  **podświetlenie atrybutów zmienionych** względem zapisanego pliku + **revert** per atrybut.
+- Port lokalizacji (7 języków, `[en, pl, es, de, fr, ja, zh]`).
+- Edycja w panelu → chirurgiczny zapis przez `WorkspaceEdit` (natywne undo/redo).
+- Testy round-trip / surgical-save / konwersji kolorów / TypeRegistry (`npm run test:unit`, 17/17).
 
 Plan kolejnych etapów: zobacz dokument planu migracji.
 
