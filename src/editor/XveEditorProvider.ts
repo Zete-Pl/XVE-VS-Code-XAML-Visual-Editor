@@ -115,7 +115,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     <div id="toolbar"></div>
     <div id="layout">
       <aside id="tree-pane"><div class="pane-title" data-l10n="View.Structure"></div><div id="tree"></div></aside>
-      <main id="preview-pane"><div class="pane-title" data-l10n="View.Preview"></div><pre id="source"></pre></main>
+      <main id="preview-pane"><div class="pane-title" data-l10n="View.Preview"></div><div id="surface-scroll"><div id="surface"></div><div id="sel-overlay"></div></div></main>
       <aside id="props-pane"><div class="pane-title" data-l10n="View.Properties"></div><div id="props"></div></aside>
     </div>
     <footer id="statusbar"></footer>
