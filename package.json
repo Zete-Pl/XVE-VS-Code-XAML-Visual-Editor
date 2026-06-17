@@ -1,0 +1,98 @@
+{
+  "name": "xve-vscode",
+  "displayName": "XAML Visual Editor (XVE)",
+  "description": "Visual editor for hand-written XAML files — structure tree, live preview and surgical save, inside VS Code.",
+  "version": "0.1.0",
+  "publisher": "zete",
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Visualization",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "xaml",
+    "wpf",
+    "visual editor",
+    "designer"
+  ],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "xve.xamlEditor",
+        "displayName": "XAML Visual Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.xaml"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "xve.openVisualEditor",
+        "title": "XVE: Open in XAML Visual Editor"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "xve.openVisualEditor",
+          "when": "resourceExtname == .xaml",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "XAML Visual Editor",
+      "properties": {
+        "xve.language": {
+          "type": "string",
+          "default": "",
+          "enum": ["", "en", "pl", "es", "de", "fr", "ja", "zh"],
+          "enumDescriptions": [
+            "Use VS Code language",
+            "English",
+            "Polski",
+            "Español",
+            "Deutsch",
+            "Français",
+            "日本語",
+            "中文"
+          ],
+          "description": "UI language for the XAML Visual Editor. Empty = follow VS Code."
+        },
+        "xve.previewBackend": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "web", "wpf-host"],
+          "enumDescriptions": [
+            "Auto-detect (WPF host on Windows, web renderer elsewhere)",
+            "Cross-platform web renderer",
+            "Windows WPF host (high fidelity)"
+          ],
+          "description": "Which preview engine to use."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "test:unit": "node --test --experimental-strip-types test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.0"
+  }
+}
