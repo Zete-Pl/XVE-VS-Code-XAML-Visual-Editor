@@ -16,6 +16,10 @@ Zrobione:
   `getElementSource` (zachowanie wcięć/formatowania).
 - **Pasek narzędzi**: dodawanie elementu (lista typów + domyślne snippety) do zaznaczonego
   kontenera, usuwanie. **Skróty**: Delete, Ctrl+C / Ctrl+V (kopiuj/wklej poddrzewo).
+- **3b — linijki, prowadnice, snap**: linijki (góra/lewo) z podziałką, **prowadnice** dodawane
+  klikiem w linijkę (przeciąganie / podwójny klik = usuń), **snap‑grid** o konfigurowalnym
+  kroku (move/resize przyciąga do siatki i prowadnic), opcjonalna **widoczna siatka**,
+  pasek **narzędzi Select / Pan**.
 
 Wcześniej:
 - Custom Text Editor dla `*.xaml` (webview: drzewo struktury, podgląd, panel właściwości).

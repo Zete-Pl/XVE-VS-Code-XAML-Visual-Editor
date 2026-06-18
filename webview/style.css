@@ -68,14 +68,126 @@ body {
   color: var(--vscode-list-activeSelectionForeground);
 }
 
+/* ---------- ramka podglądu z linijkami ---------- */
+#preview-pane {
+  overflow: hidden;
+}
+#preview-tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  flex-wrap: wrap;
+}
+.tool-group {
+  display: flex;
+}
+.tool-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: inherit;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.tool-btn:hover {
+  background: var(--vscode-toolbar-hoverBackground, #ffffff14);
+}
+.tool-btn.active {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
+}
+.tool-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--vscode-panel-border);
+  margin: 0 2px;
+}
+.tool-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  opacity: 0.85;
+}
+.tool-num {
+  width: 42px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent);
+  padding: 1px 4px;
+}
+
+#preview-frame {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  grid-template-rows: 22px 1fr;
+}
+#ruler-corner {
+  background: var(--vscode-editorWidget-background, #00000022);
+  border-right: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+#ruler-top,
+#ruler-left {
+  display: block;
+  background: var(--vscode-editorWidget-background, #00000016);
+  cursor: crosshair;
+}
+#ruler-top {
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+#ruler-left {
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
 /* ---------- powierzchnia podglądu ---------- */
 #surface-scroll {
   position: relative;
-  flex: 1;
   overflow: auto;
   padding: 24px;
   background:
     repeating-conic-gradient(var(--vscode-editorWidget-background, #80808022) 0% 25%, transparent 0% 50%) 50% / 16px 16px;
+}
+#grid-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+#guide-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 9;
+}
+.guide {
+  position: absolute;
+  pointer-events: auto;
+  background-color: var(--vscode-editorWarning-foreground, #1a9fff);
+  background-clip: content-box;
+}
+.guide.gx {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  padding: 0 3px;
+  margin-left: -3px;
+  cursor: ew-resize;
+}
+.guide.gy {
+  left: 0;
+  right: 0;
+  height: 1px;
+  padding: 3px 0;
+  margin-top: -3px;
+  cursor: ns-resize;
 }
 #surface {
   position: relative;

@@ -96,6 +96,7 @@ function renderPreview() {
   const surface = document.getElementById("surface")!;
   renderTreeToDom(tree, surface);
   updateOverlay();
+  drawDecorations();
 }
 
 function updateOverlay() {
@@ -396,10 +397,37 @@ function buildHandles() {
   }
 }
 
+// ---------- narzędzia / snap / siatka / prowadnice ----------
+type Tool = "select" | "pan";
+let tool: Tool = "select";
+let snapOn = true;
+let gridStep = 8;
+let showGrid = false;
+interface Guide {
+  axis: "x" | "y";
+  pos: number;
+}
+let guides: Guide[] = [];
+
 // ---------- gesty: przesuwanie i skalowanie ----------
-const SNAP = 1; // krok zaokrąglenia (px)
 function snap(v: number): number {
-  return Math.round(v / SNAP) * SNAP;
+  const step = snapOn ? gridStep : 1;
+  return Math.round(v / step) * step;
+}
+/** Przyciąganie wartości do najbliższej prowadnicy danej osi (w granicach progu). */
+function snapToGuide(axis: "x" | "y", value: number, threshold = 6): number {
+  let best = value;
+  let bestD = threshold;
+  for (const g of guides) {
+    if (g.axis === axis) {
+      const d = Math.abs(g.pos - value);
+      if (d < bestD) {
+        bestD = d;
+        best = g.pos;
+      }
+    }
+  }
+  return best;
 }
 
 interface Drag {
@@ -495,20 +523,20 @@ function computeMove(node: RenderNode, dx: number, dy: number): Record<string, s
   const a = attrMapOf(node);
   const parent = parentById.get(node.id);
   if (parent && localTag(parent.tag) === "Canvas") {
-    const l = numOf(a["Canvas.Left"]) ?? 0;
-    const t = numOf(a["Canvas.Top"]) ?? 0;
-    return { "Canvas.Left": String(snap(l + dx)), "Canvas.Top": String(snap(t + dy)) };
+    const l = snapToGuide("x", snap((numOf(a["Canvas.Left"]) ?? 0) + dx));
+    const t = snapToGuide("y", snap((numOf(a["Canvas.Top"]) ?? 0) + dy));
+    return { "Canvas.Left": String(l), "Canvas.Top": String(t) };
   }
   const [ml, mt, mr, mb] = thicknessOf(a.Margin);
   let nl = ml,
     nt = mt,
     nr = mr,
     nb = mb;
-  if ((a.HorizontalAlignment || "Stretch") === "Right") nr = mr - dx;
-  else nl = ml + dx;
-  if ((a.VerticalAlignment || "Stretch") === "Bottom") nb = mb - dy;
-  else nt = mt + dy;
-  return { Margin: `${snap(nl)},${snap(nt)},${snap(nr)},${snap(nb)}` };
+  if ((a.HorizontalAlignment || "Stretch") === "Right") nr = snap(mr - dx);
+  else nl = snapToGuide("x", snap(ml + dx));
+  if ((a.VerticalAlignment || "Stretch") === "Bottom") nb = snap(mb - dy);
+  else nt = snapToGuide("y", snap(mt + dy));
+  return { Margin: `${nl},${nt},${nr},${nb}` };
 }
 
 function computeResize(
@@ -551,8 +579,262 @@ function computeResize(
   return out;
 }
 
-// klik w podglądzie → zaznaczenie + start przeciągania
+// ---------- pasek narzędzi podglądu (Select/Pan + snap/siatka) ----------
+function buildPreviewTools() {
+  const host = document.getElementById("preview-tools")!;
+  host.innerHTML = "";
+
+  const group = document.createElement("div");
+  group.className = "tool-group";
+  const mkTool = (id: Tool, label: string, tip: string) => {
+    const b = document.createElement("button");
+    b.className = "tool-btn" + (tool === id ? " active" : "");
+    b.textContent = label;
+    b.title = tip;
+    b.onclick = () => {
+      tool = id;
+      const sc = document.getElementById("surface-scroll")!;
+      sc.style.cursor = id === "pan" ? "grab" : "";
+      buildPreviewTools();
+    };
+    return b;
+  };
+  group.appendChild(mkTool("select", T("Tool.Select"), T("Tool.SelectTip")));
+  group.appendChild(mkTool("pan", T("Tool.Pan"), T("Tool.PanTip")));
+  host.appendChild(group);
+
+  host.appendChild(sep());
+
+  // snap on/off + krok siatki
+  const snapField = document.createElement("label");
+  snapField.className = "tool-field";
+  const snapCb = document.createElement("input");
+  snapCb.type = "checkbox";
+  snapCb.checked = snapOn;
+  snapCb.onchange = () => (snapOn = snapCb.checked);
+  snapField.append(snapCb, document.createTextNode(T("Tool.Snap")));
+  host.appendChild(snapField);
+
+  const gridField = document.createElement("label");
+  gridField.className = "tool-field";
+  const gridNum = document.createElement("input");
+  gridNum.type = "number";
+  gridNum.min = "1";
+  gridNum.className = "tool-num";
+  gridNum.value = String(gridStep);
+  gridNum.onchange = () => {
+    const v = parseInt(gridNum.value, 10);
+    if (v > 0) {
+      gridStep = v;
+      renderGrid();
+    }
+  };
+  gridField.append(document.createTextNode(T("Tool.Grid")), gridNum, document.createTextNode("px"));
+  host.appendChild(gridField);
+
+  const showField = document.createElement("label");
+  showField.className = "tool-field";
+  const showCb = document.createElement("input");
+  showCb.type = "checkbox";
+  showCb.checked = showGrid;
+  showCb.onchange = () => {
+    showGrid = showCb.checked;
+    renderGrid();
+  };
+  showField.append(showCb, document.createTextNode(T("Tool.ShowGrid")));
+  host.appendChild(showField);
+
+  host.appendChild(sep());
+  const clr = document.createElement("button");
+  clr.className = "tool-btn";
+  clr.textContent = T("Tool.ClearGuides");
+  clr.title = T("Tool.ClearGuidesTip");
+  clr.onclick = () => {
+    guides = [];
+    renderGuides();
+  };
+  host.appendChild(clr);
+}
+function sep(): HTMLElement {
+  const s = document.createElement("div");
+  s.className = "tool-sep";
+  return s;
+}
+
+// ---------- współrzędne projektu ↔ ekran ----------
+function surfaceEl(): HTMLElement {
+  return document.getElementById("surface")!;
+}
+function scrollEl(): HTMLElement {
+  return document.getElementById("surface-scroll")!;
+}
+/** Współrzędna projektowa z pozycji myszy (0,0 = lewy-górny róg powierzchni). */
+function clientToDesign(clientX: number, clientY: number): { x: number; y: number } {
+  const sc = scrollEl();
+  const r = sc.getBoundingClientRect();
+  const s = surfaceEl();
+  return {
+    x: clientX - r.left + sc.scrollLeft - s.offsetLeft,
+    y: clientY - r.top + sc.scrollTop - s.offsetTop,
+  };
+}
+
+// ---------- linijki ----------
+function sizeCanvas(c: HTMLCanvasElement): CanvasRenderingContext2D {
+  const dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth;
+  const h = c.clientHeight;
+  c.width = Math.max(1, Math.round(w * dpr));
+  c.height = Math.max(1, Math.round(h * dpr));
+  const ctx = c.getContext("2d")!;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return ctx;
+}
+function cssVar(name: string, fallback: string): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+function drawRulers() {
+  const top = document.getElementById("ruler-top") as HTMLCanvasElement;
+  const left = document.getElementById("ruler-left") as HTMLCanvasElement;
+  if (!top || !left) return;
+  const sc = scrollEl();
+  const s = surfaceEl();
+  const fg = cssVar("--vscode-foreground", "#888");
+  const originX = s.offsetLeft - sc.scrollLeft;
+  const originY = s.offsetTop - sc.scrollTop;
+  drawRulerAxis(sizeCanvas(top), "x", originX, top.clientWidth, top.clientHeight, fg);
+  drawRulerAxis(sizeCanvas(left), "y", originY, left.clientHeight, left.clientWidth, fg);
+}
+function drawRulerAxis(
+  ctx: CanvasRenderingContext2D,
+  axis: "x" | "y",
+  origin: number,
+  length: number,
+  thickness: number,
+  color: string
+) {
+  const minor = 10;
+  const major = 50;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.7;
+  ctx.font = "9px var(--vscode-font-family)";
+  ctx.lineWidth = 1;
+  const startC = Math.floor((0 - origin) / minor) * minor;
+  const endC = Math.ceil((length - origin) / minor) * minor;
+  ctx.beginPath();
+  for (let c = startC; c <= endC; c += minor) {
+    const p = Math.round(origin + c) + 0.5;
+    const isMajor = c % major === 0;
+    const len = isMajor ? thickness : 5;
+    if (axis === "x") {
+      ctx.moveTo(p, thickness - len);
+      ctx.lineTo(p, thickness);
+    } else {
+      ctx.moveTo(thickness - len, p);
+      ctx.lineTo(thickness, p);
+    }
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  for (let c = startC; c <= endC; c += major) {
+    const p = Math.round(origin + c);
+    if (axis === "x") {
+      ctx.fillText(String(c), p + 2, 8);
+    } else {
+      ctx.save();
+      ctx.translate(8, p + 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText(String(c), 0, 0);
+      ctx.restore();
+    }
+  }
+}
+
+// ---------- siatka i prowadnice ----------
+function sizeLayer(layer: HTMLElement) {
+  const sc = scrollEl();
+  layer.style.width = sc.scrollWidth + "px";
+  layer.style.height = sc.scrollHeight + "px";
+}
+function renderGrid() {
+  const layer = document.getElementById("grid-layer")!;
+  sizeLayer(layer);
+  if (!showGrid) {
+    layer.style.backgroundImage = "none";
+    return;
+  }
+  const s = surfaceEl();
+  const line = cssVar("--vscode-panel-border", "#8884");
+  layer.style.backgroundImage = `linear-gradient(to right, ${line} 1px, transparent 1px), linear-gradient(to bottom, ${line} 1px, transparent 1px)`;
+  layer.style.backgroundSize = `${gridStep}px ${gridStep}px`;
+  layer.style.backgroundPosition = `${s.offsetLeft}px ${s.offsetTop}px`;
+}
+function renderGuides() {
+  const layer = document.getElementById("guide-layer")!;
+  sizeLayer(layer);
+  layer.innerHTML = "";
+  const s = surfaceEl();
+  guides.forEach((g, i) => {
+    const d = document.createElement("div");
+    d.className = "guide " + (g.axis === "x" ? "gx" : "gy");
+    if (g.axis === "x") d.style.left = s.offsetLeft + g.pos + "px";
+    else d.style.top = s.offsetTop + g.pos + "px";
+    d.dataset.gi = String(i);
+    d.title = `${g.axis === "x" ? "X" : "Y"} = ${g.pos}`;
+    layer.appendChild(d);
+  });
+}
+function drawDecorations() {
+  drawRulers();
+  renderGrid();
+  renderGuides();
+}
+
+// dodawanie prowadnic klikiem w linijkę
+document.getElementById("ruler-top")!.addEventListener("mousedown", (e) => {
+  const { x } = clientToDesign(e.clientX, e.clientY);
+  guides.push({ axis: "x", pos: snap(x) });
+  renderGuides();
+});
+document.getElementById("ruler-left")!.addEventListener("mousedown", (e) => {
+  const { y } = clientToDesign(e.clientX, e.clientY);
+  guides.push({ axis: "y", pos: snap(y) });
+  renderGuides();
+});
+
+// przeciąganie / usuwanie prowadnic
+let guideDrag: number | null = null;
+document.getElementById("guide-layer")!.addEventListener("mousedown", (e) => {
+  const g = (e.target as HTMLElement).closest<HTMLElement>(".guide");
+  if (!g) return;
+  e.preventDefault();
+  guideDrag = Number(g.dataset.gi);
+});
+document.getElementById("guide-layer")!.addEventListener("dblclick", (e) => {
+  const g = (e.target as HTMLElement).closest<HTMLElement>(".guide");
+  if (!g) return;
+  guides.splice(Number(g.dataset.gi), 1);
+  renderGuides();
+});
+
+// ---------- pan ----------
+let pan: { x: number; y: number; sl: number; st: number } | null = null;
+function startPan(e: MouseEvent) {
+  const sc = scrollEl();
+  pan = { x: e.clientX, y: e.clientY, sl: sc.scrollLeft, st: sc.scrollTop };
+  sc.style.cursor = "grabbing";
+}
+
+// klik w podglądzie → pan / zaznaczenie + start przeciągania
 document.getElementById("surface")!.addEventListener("mousedown", (e) => {
+  if (tool === "pan") {
+    e.preventDefault();
+    startPan(e);
+    return;
+  }
   const t = (e.target as HTMLElement).closest<HTMLElement>("[data-xve-id]");
   if (!t) return;
   e.preventDefault();
@@ -576,6 +858,28 @@ document.getElementById("sel-overlay")!.addEventListener("mousedown", (e) => {
 window.addEventListener("mousemove", onDragMove);
 window.addEventListener("mouseup", onDragUp);
 
+// przeciąganie prowadnic + pan
+window.addEventListener("mousemove", (e) => {
+  if (guideDrag !== null && guides[guideDrag]) {
+    const g = guides[guideDrag];
+    const d = clientToDesign(e.clientX, e.clientY);
+    g.pos = snap(g.axis === "x" ? d.x : d.y);
+    renderGuides();
+  }
+  if (pan) {
+    const sc = scrollEl();
+    sc.scrollLeft = pan.sl - (e.clientX - pan.x);
+    sc.scrollTop = pan.st - (e.clientY - pan.y);
+  }
+});
+window.addEventListener("mouseup", () => {
+  if (pan) {
+    scrollEl().style.cursor = tool === "pan" ? "grab" : "";
+    pan = null;
+  }
+  guideDrag = null;
+});
+
 // skróty: Delete / Ctrl+C / Ctrl+V
 window.addEventListener("keydown", (e) => {
   const tag = (e.target as HTMLElement)?.tagName;
@@ -590,8 +894,14 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-window.addEventListener("resize", updateOverlay);
-document.getElementById("surface-scroll")!.addEventListener("scroll", updateOverlay);
+window.addEventListener("resize", () => {
+  updateOverlay();
+  drawDecorations();
+});
+document.getElementById("surface-scroll")!.addEventListener("scroll", () => {
+  updateOverlay();
+  drawRulers();
+});
 buildHandles();
 
 window.addEventListener("message", (e) => {
@@ -601,6 +911,7 @@ window.addEventListener("message", (e) => {
       l10n = msg.l10n ?? {};
       applyStaticL10n();
       buildToolbar();
+      buildPreviewTools();
       break;
     case "clipboard":
       clipboardXml = msg.xml ?? null;
