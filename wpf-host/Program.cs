@@ -131,16 +131,39 @@ internal static class Program
         return new Surface(rootFe, pxW, pxH, rootUid);
     }
 
-    private static Resp RenderResult(int id, Surface s)
+    // Górny limit rozdzielczości bitmapy — koszt rasteryzacji/PNG/transferu stały
+    // niezależnie od rozmiaru okna. Webview wyświetla w rozmiarze logicznym (upscale).
+    private const int RenderCap = 2560;
+
+    private static string RenderPng(FrameworkElement root, int pxW, int pxH)
     {
-        var rtb = new RenderTargetBitmap(s.pxW, s.pxH, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(s.root);
+        double scale = Math.Min(1.0, (double)RenderCap / Math.Max(pxW, pxH));
+        RenderTargetBitmap rtb;
+        if (scale >= 1.0)
+        {
+            rtb = new RenderTargetBitmap(pxW, pxH, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(root);
+        }
+        else
+        {
+            int bw = Math.Max(1, (int)Math.Round(pxW * scale));
+            int bh = Math.Max(1, (int)Math.Round(pxH * scale));
+            rtb = new RenderTargetBitmap(bw, bh, 96, 96, PixelFormats.Pbgra32);
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+                dc.DrawRectangle(new VisualBrush(root) { Stretch = Stretch.Fill }, null, new Rect(0, 0, bw, bh));
+            rtb.Render(dv);
+        }
         var enc = new PngBitmapEncoder();
         enc.Frames.Add(BitmapFrame.Create(rtb));
         using var ms = new MemoryStream();
         enc.Save(ms);
-        string png = Convert.ToBase64String(ms.ToArray());
+        return Convert.ToBase64String(ms.ToArray());
+    }
 
+    private static Resp RenderResult(int id, Surface s)
+    {
+        string png = RenderPng(s.root, s.pxW, s.pxH);
         var rects = new List<RectInfo>();
         if (!string.IsNullOrEmpty(s.rootUid) && s.rootUid!.StartsWith("u"))
             rects.Add(new RectInfo { uid = s.rootUid, x = 0, y = 0, w = s.pxW, h = s.pxH });
