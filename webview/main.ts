@@ -939,7 +939,9 @@ function startDragPump() {
   dragLastFrameSent = 0;
   dragLastSent = performance.now();
   renderInFlight = false;
-  dragSessionActive = dragSession;
+  // trwała sesja nie dla korzenia (Window): zmiana jego Width/Height musi przeliczyć
+  // rozmiar płótna, co robi tylko pełny re-render
+  dragSessionActive = dragSession && !!drag && !!tree && drag.id !== tree.id;
   // trwała sesja: host parsuje RAZ na początku gestu
   if (dragSessionActive && drag) vscode.postMessage({ type: "dragStart", id: drag.id });
   const tick = (t: number) => {

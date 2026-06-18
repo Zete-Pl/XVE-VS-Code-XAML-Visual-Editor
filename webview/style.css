@@ -431,6 +431,11 @@ body {
 #surface.png {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
+/* obraz podglądu w naturalnym rozmiarze (przewijany), bez dociskania do kontenera */
+#surface img {
+  max-width: none;
+  max-height: none;
+}
 #sel-overlay.no-handles .sel-handle {
   display: none;
 }
