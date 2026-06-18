@@ -230,6 +230,40 @@ body {
   transform: rotate(-90deg);
   transform-origin: left top;
 }
+
+/* znaczniki prowadnic na linijkach (z wartością pozycji, przeciągalne) */
+#ruler-top-guides,
+#ruler-left-guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ruler-guide {
+  position: absolute;
+  pointer-events: auto;
+  background: var(--vscode-editorWarning-foreground, #1a9fff);
+  color: var(--vscode-editor-background, #000);
+  font-size: 9px;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 2px;
+  white-space: nowrap;
+  z-index: 2;
+}
+.ruler-guide.gx {
+  top: 1px;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+}
+.ruler-guide.gy {
+  left: 1px;
+  transform: translateY(-50%);
+  cursor: ns-resize;
+}
+.ruler-guide.dragging {
+  background: var(--vscode-charts-orange, #e0863a);
+  color: #fff;
+}
 #grid-layer {
   position: absolute;
   left: 0;
@@ -514,6 +548,37 @@ body {
   margin-top: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--vscode-panel-border);
+}
+
+/* sekcja Prowadnice w panelu właściwości */
+.guides-section {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+.pane-subtitle {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+.guide-group {
+  margin-bottom: 8px;
+}
+.guide-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 3px 0;
+}
+.guide-row .field-input {
+  flex: 1;
+}
+.guide-add {
+  margin-top: 2px;
+  font-size: 11px;
 }
 .empty {
   padding: 10px;

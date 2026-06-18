@@ -183,8 +183,8 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
             <div id="guide-layer"></div>
             <div id="sel-overlay"></div>
           </div>
-          <div id="ruler-top"><div id="ruler-top-ticks"></div><div id="ruler-top-labels"></div></div>
-          <div id="ruler-left"><div id="ruler-left-ticks"></div><div id="ruler-left-labels"></div></div>
+          <div id="ruler-top"><div id="ruler-top-ticks"></div><div id="ruler-top-labels"></div><div id="ruler-top-guides"></div></div>
+          <div id="ruler-left"><div id="ruler-left-ticks"></div><div id="ruler-left-labels"></div><div id="ruler-left-guides"></div></div>
           <div id="ruler-corner"></div>
         </div>
       </main>

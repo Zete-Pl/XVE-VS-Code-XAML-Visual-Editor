@@ -195,12 +195,15 @@ function makeEditor(meta: PropMeta, value: string, onChange: (v: string) => void
 function renderProps() {
   const host = document.getElementById("props")!;
   host.innerHTML = "";
-  if (selectedId === null) {
-    host.innerHTML = `<div class="empty">${T("View.NoSelection")}</div>`;
+  const node = selectedId !== null ? nodeById.get(selectedId) : undefined;
+  if (!node) {
+    const note = document.createElement("div");
+    note.className = "empty";
+    note.textContent = T("View.NoSelection");
+    host.appendChild(note);
+    renderGuidesSection(host);
     return;
   }
-  const node = nodeById.get(selectedId);
-  if (!node) return;
   const id = node.id;
   const ch = changed[id] ?? {};
 
@@ -263,6 +266,81 @@ function renderProps() {
     add.appendChild(sel);
     host.appendChild(add);
   }
+
+  renderGuidesSection(host);
+}
+
+/** Sekcja „Prowadnice" — lista pionowych/poziomych z edycją liczbową, +Dodaj, ×, Usuń wszystkie. */
+function renderGuidesSection(host: HTMLElement) {
+  const sec = document.createElement("div");
+  sec.className = "guides-section";
+  const title = document.createElement("div");
+  title.className = "pane-subtitle";
+  title.textContent = T("Guides.Title");
+  sec.appendChild(title);
+  sec.appendChild(guideList("x", T("Guides.Vertical")));
+  sec.appendChild(guideList("y", T("Guides.Horizontal")));
+  if (guides.length) {
+    const clr = document.createElement("button");
+    clr.className = "tool-btn";
+    clr.textContent = T("Tool.ClearGuides");
+    clr.onclick = () => {
+      guides = [];
+      renderGuides();
+      updateRulers();
+      renderProps();
+    };
+    sec.appendChild(clr);
+  }
+  host.appendChild(sec);
+}
+function guideList(axis: "x" | "y", label: string): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.className = "guide-group";
+  const h = document.createElement("div");
+  h.className = "field-name";
+  h.textContent = label;
+  wrap.appendChild(h);
+  guides.forEach((g, i) => {
+    if (g.axis !== axis) return;
+    const row = document.createElement("div");
+    row.className = "guide-row";
+    const inp = document.createElement("input");
+    inp.type = "number";
+    inp.className = "field-input";
+    inp.value = String(g.pos);
+    inp.onchange = () => {
+      const v = parseFloat(inp.value);
+      if (!isNaN(v)) {
+        g.pos = v;
+        renderGuides();
+        updateRulers();
+      }
+    };
+    const del = document.createElement("button");
+    del.className = "field-btn";
+    del.title = T("Prop.Remove");
+    del.textContent = "✕";
+    del.onclick = () => {
+      guides.splice(i, 1);
+      renderGuides();
+      updateRulers();
+      renderProps();
+    };
+    row.append(inp, del);
+    wrap.appendChild(row);
+  });
+  const add = document.createElement("button");
+  add.className = "tool-btn guide-add";
+  add.textContent = "+ " + T(axis === "x" ? "Guides.AddV" : "Guides.AddH");
+  add.onclick = () => {
+    guides.push({ axis, pos: 0 });
+    renderGuides();
+    updateRulers();
+    renderProps();
+  };
+  wrap.appendChild(add);
+  return wrap;
 }
 
 /** Próbuje sprowadzić wartość pędzla do #RRGGBB dla <input type=color>. */
@@ -410,6 +488,7 @@ interface Guide {
   pos: number;
 }
 let guides: Guide[] = [];
+let guideDrag: number | null = null;
 
 // ---------- gesty: przesuwanie i skalowanie ----------
 function snap(v: number): number {
@@ -756,6 +835,25 @@ function updateRulers() {
   if (leftTicks) leftTicks.style.backgroundPositionY = `${originY}px, ${originY}px`;
   buildAxisLabels(document.getElementById("ruler-top-labels"), "x", originX);
   buildAxisLabels(document.getElementById("ruler-left-labels"), "y", originY);
+  renderGuideMarkers(originX, originY);
+}
+/** Znaczniki prowadnic na linijkach (z wartością pozycji, przeciągalne). */
+function renderGuideMarkers(originX: number, originY: number) {
+  const top = document.getElementById("ruler-top-guides");
+  const left = document.getElementById("ruler-left-guides");
+  if (top) top.innerHTML = "";
+  if (left) left.innerHTML = "";
+  guides.forEach((g, i) => {
+    const host = g.axis === "x" ? top : left;
+    if (!host) return;
+    const m = document.createElement("div");
+    m.className = "ruler-guide " + (g.axis === "x" ? "gx" : "gy") + (guideDrag === i ? " dragging" : "");
+    m.textContent = String(g.pos);
+    if (g.axis === "x") m.style.left = originX + g.pos + "px";
+    else m.style.top = originY + g.pos + "px";
+    m.dataset.gi = String(i);
+    host.appendChild(m);
+  });
 }
 function buildAxisLabels(host: HTMLElement | null, axis: "x" | "y", origin: number) {
   if (!host) return;
@@ -818,20 +916,35 @@ function drawDecorations() {
   renderGuides();
 }
 
-// dodawanie prowadnic klikiem w linijkę
-document.getElementById("ruler-top")!.addEventListener("mousedown", (e) => {
-  const { x } = clientToDesign(e.clientX, e.clientY);
-  guides.push({ axis: "x", pos: snap(x) });
+// linijki: klik w pasek = utwórz prowadnicę i od razu ją przeciągaj;
+// klik w istniejący znacznik = przeciągaj go; podwójny klik = usuń.
+function rulerMouseDown(axis: "x" | "y", e: MouseEvent) {
+  e.preventDefault();
+  const marker = (e.target as HTMLElement).closest<HTMLElement>(".ruler-guide");
+  if (marker) {
+    guideDrag = Number(marker.dataset.gi);
+  } else {
+    const d = clientToDesign(e.clientX, e.clientY);
+    guides.push({ axis, pos: snap(axis === "x" ? d.x : d.y) });
+    guideDrag = guides.length - 1;
+  }
   renderGuides();
-});
-document.getElementById("ruler-left")!.addEventListener("mousedown", (e) => {
-  const { y } = clientToDesign(e.clientX, e.clientY);
-  guides.push({ axis: "y", pos: snap(y) });
+  updateRulers();
+}
+function rulerDblRemove(e: MouseEvent) {
+  const m = (e.target as HTMLElement).closest<HTMLElement>(".ruler-guide");
+  if (!m) return;
+  guides.splice(Number(m.dataset.gi), 1);
   renderGuides();
-});
+  updateRulers();
+  renderProps();
+}
+document.getElementById("ruler-top")!.addEventListener("mousedown", (e) => rulerMouseDown("x", e));
+document.getElementById("ruler-left")!.addEventListener("mousedown", (e) => rulerMouseDown("y", e));
+document.getElementById("ruler-top")!.addEventListener("dblclick", rulerDblRemove);
+document.getElementById("ruler-left")!.addEventListener("dblclick", rulerDblRemove);
 
-// przeciąganie / usuwanie prowadnic
-let guideDrag: number | null = null;
+// przeciąganie / usuwanie prowadnic na powierzchni
 document.getElementById("guide-layer")!.addEventListener("mousedown", (e) => {
   const g = (e.target as HTMLElement).closest<HTMLElement>(".guide");
   if (!g) return;
@@ -843,6 +956,8 @@ document.getElementById("guide-layer")!.addEventListener("dblclick", (e) => {
   if (!g) return;
   guides.splice(Number(g.dataset.gi), 1);
   renderGuides();
+  updateRulers();
+  renderProps();
 });
 
 // ---------- pan ----------
@@ -890,6 +1005,7 @@ window.addEventListener("mousemove", (e) => {
     const d = clientToDesign(e.clientX, e.clientY);
     g.pos = snap(g.axis === "x" ? d.x : d.y);
     renderGuides();
+    updateRulers();
   }
   if (pan) {
     const sc = scrollEl();
@@ -902,7 +1018,11 @@ window.addEventListener("mouseup", () => {
     scrollEl().style.cursor = tool === "pan" ? "grab" : "";
     pan = null;
   }
-  guideDrag = null;
+  if (guideDrag !== null) {
+    guideDrag = null;
+    updateRulers(); // zdejmij podświetlenie „dragging"
+    renderProps(); // odśwież liczby w sekcji Prowadnice
+  }
 });
 
 // skróty: Delete / Ctrl+C / Ctrl+V
