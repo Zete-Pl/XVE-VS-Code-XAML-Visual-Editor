@@ -26,6 +26,8 @@ let changed: Record<number, Record<string, string | null>> = {};
 let changesData: Change[] = [];
 let viewMode: "design" | "changes" = "design";
 let showInlineDiff = true; // podświetlanie zmian w edytorze tekstu (przełącznik w Changes)
+let isWindows = false;
+let backend = "auto"; // auto | web | wpf-host
 const nodeById = new Map<number, RenderNode>();
 const parentById = new Map<number, RenderNode | null>();
 let clipboardXml: string | null = null;
@@ -446,6 +448,77 @@ function buildToolbar() {
   vg.appendChild(mkView("design", T("View.Design")));
   vg.appendChild(mkView("changes", changesLabel()));
   tb.appendChild(vg);
+
+  // przycisk ustawień (po prawej)
+  const spacer = document.createElement("div");
+  spacer.style.flex = "1";
+  tb.appendChild(spacer);
+  const gear = document.createElement("button");
+  gear.className = "tb-btn";
+  gear.textContent = "⚙";
+  gear.title = T("Settings.Title");
+  gear.onclick = () => toggleSettings();
+  tb.appendChild(gear);
+}
+
+// ---------- panel ustawień ----------
+function toggleSettings(force?: boolean) {
+  const overlay = document.getElementById("settings-overlay")!;
+  const show = force ?? overlay.classList.contains("hidden");
+  overlay.classList.toggle("hidden", !show);
+  if (show) buildSettings();
+}
+function buildSettings() {
+  const panel = document.getElementById("settings-panel")!;
+  panel.innerHTML = "";
+
+  const head = document.createElement("div");
+  head.className = "settings-head";
+  const title = document.createElement("span");
+  title.className = "pane-subtitle";
+  title.textContent = T("Settings.Title");
+  const close = document.createElement("button");
+  close.className = "field-btn";
+  close.textContent = "✕";
+  close.onclick = () => toggleSettings(false);
+  head.append(title, close);
+  panel.appendChild(head);
+
+  // wybór backendu podglądu
+  const sec = document.createElement("div");
+  sec.className = "settings-section";
+  const label = document.createElement("div");
+  label.className = "field-name";
+  label.textContent = T("Settings.Backend");
+  sec.appendChild(label);
+
+  const opts: { value: string; label: string; winOnly?: boolean }[] = [
+    { value: "auto", label: T("Backend.Auto") },
+    { value: "web", label: T("Backend.Web") },
+    { value: "wpf-host", label: T("Backend.WpfHost"), winOnly: true },
+  ];
+  for (const o of opts) {
+    if (o.winOnly && !isWindows) continue;
+    const row = document.createElement("label");
+    row.className = "settings-radio";
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "xve-backend";
+    radio.checked = backend === o.value;
+    radio.onchange = () => {
+      backend = o.value;
+      vscode.postMessage({ type: "setBackend", value: o.value });
+    };
+    row.append(radio, document.createTextNode(o.label));
+    sec.appendChild(row);
+  }
+  if (!isWindows) {
+    const note = document.createElement("div");
+    note.className = "settings-note";
+    note.textContent = T("Backend.WindowsOnly");
+    sec.appendChild(note);
+  }
+  panel.appendChild(sec);
 }
 
 function changesLabel(): string {
@@ -1192,6 +1265,8 @@ window.addEventListener("message", (e) => {
   switch (msg.type) {
     case "init":
       l10n = msg.l10n ?? {};
+      isWindows = !!msg.isWindows;
+      backend = msg.backend ?? "auto";
       applyStaticL10n();
       buildToolbar();
       buildPreviewTools();

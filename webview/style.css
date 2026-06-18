@@ -550,6 +550,51 @@ body {
   border-top: 1px solid var(--vscode-panel-border);
 }
 
+/* ---------- panel ustawień ---------- */
+#settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+#settings-overlay.hidden {
+  display: none;
+}
+#settings-panel {
+  margin-top: 48px;
+  min-width: 320px;
+  max-width: 440px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: 12px 14px;
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.settings-section {
+  margin-bottom: 8px;
+}
+.settings-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.settings-note {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
 /* ---------- widok Changes ---------- */
 #changes-view {
   display: none;

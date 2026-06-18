@@ -111,6 +111,8 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
             type: "init",
             l10n: dictionaryForIndex(currentLanguageIndex()),
             languages: LANGUAGES,
+            isWindows: process.platform === "win32",
+            backend: vscode.workspace.getConfiguration("xve").get<string>("previewBackend") || "auto",
           });
           sendDoc();
           break;
@@ -160,6 +162,16 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         case "revealNode":
           this.revealNode(document, msg.id);
           break;
+        case "setBackend": {
+          const value = ["auto", "web", "wpf-host"].includes(msg.value) ? msg.value : "auto";
+          // na innych platformach niż Windows zawsze cross-platform (web)
+          const effective = process.platform === "win32" ? value : "web";
+          await vscode.workspace
+            .getConfiguration("xve")
+            .update("previewBackend", effective, vscode.ConfigurationTarget.Global);
+          sendDoc();
+          break;
+        }
         case "revertAll":
           if (document.getText() !== baselineText) {
             const edit = new vscode.WorkspaceEdit();
@@ -260,6 +272,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
       <aside id="props-pane"><div class="pane-title" data-l10n="View.Properties"></div><div id="props"></div></aside>
     </div>
     <footer id="statusbar"></footer>
+    <div id="settings-overlay" class="hidden"><div id="settings-panel"></div></div>
   </div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
