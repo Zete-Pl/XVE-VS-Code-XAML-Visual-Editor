@@ -30,8 +30,13 @@ let isWindows = false;
 let backend = "auto"; // auto | web | wpf-host
 let previewMode: "web" | "wpf" = "web";
 let hostPng: string | null = null;
-let hostW = 0;
+let hostW = 0; // pełny logiczny rozmiar powierzchni
 let hostH = 0;
+let hostVx = 0; // wycinek (slice) renderu — w trybie „widoczny obszar"
+let hostVy = 0;
+let hostVw = 0;
+let hostVh = 0;
+let viewportRender = false; // render tylko widocznego obszaru (opcja)
 const hostRects = new Map<number, { x: number; y: number; w: number; h: number }>();
 // strategia podglądu przeciągania w trybie PNG (host WPF)
 let dragPreviewMode: "overlay" | "frames" | "ms" = "overlay";
@@ -117,14 +122,22 @@ function renderPreview() {
   const png = previewMode === "wpf" && hostPng;
   surface.classList.toggle("png", !!png);
   if (png) {
+    // #surface = PEŁNY logiczny rozmiar powierzchni; obraz to wycinek (vx,vy,vw,vh).
+    // Dla pełnego renderu wycinek = cała powierzchnia, więc obraz ją wypełnia.
     surface.innerHTML = "";
+    surface.style.width = hostW + "px";
+    surface.style.height = hostH + "px";
     const img = document.createElement("img");
     img.src = "data:image/png;base64," + hostPng;
-    img.style.display = "block";
-    img.style.width = hostW + "px";
-    img.style.height = hostH + "px";
+    img.style.position = "absolute";
+    img.style.left = hostVx + "px";
+    img.style.top = hostVy + "px";
+    img.style.width = hostVw + "px";
+    img.style.height = hostVh + "px";
     surface.appendChild(img);
   } else {
+    surface.style.width = "";
+    surface.style.height = "";
     renderTreeToDom(tree, surface);
   }
   applyZoomTransform();
@@ -678,6 +691,20 @@ function buildSettings() {
   };
   capRow.append(document.createTextNode(T("Drag.MaxRes")), capInp, document.createTextNode("px"));
   drag.appendChild(capRow);
+
+  // render tylko widocznego obszaru (eksperymentalne)
+  const vpRow = document.createElement("label");
+  vpRow.className = "settings-radio";
+  const vpCb = document.createElement("input");
+  vpCb.type = "checkbox";
+  vpCb.checked = viewportRender;
+  vpCb.onchange = () => {
+    viewportRender = vpCb.checked;
+    if (viewportRender) sendViewbox(); // przekaż prostokąt zanim host zacznie renderować wycinek
+    vscode.postMessage({ type: "setViewportRender", enabled: viewportRender });
+  };
+  vpRow.append(vpCb, document.createTextNode(T("Drag.Viewport")));
+  drag.appendChild(vpRow);
 
   const dnote = document.createElement("div");
   dnote.className = "settings-note";
@@ -1317,6 +1344,38 @@ function reportViewport() {
   const h = Math.max(1, Math.round((sc.clientHeight - 48) / zoom));
   vscode.postMessage({ type: "viewport", width: w, height: h });
 }
+
+/** Wysyła widoczny prostokąt (jednostki projektu) do hosta — tryb „render widocznego obszaru". */
+function sendViewbox() {
+  if (!viewportRender || previewMode !== "wpf") return;
+  const sc = scrollEl();
+  const ze = zoomEl().getBoundingClientRect();
+  const scR = sc.getBoundingClientRect();
+  const margin = 100; // overscan w jednostkach projektu (zapas przy przewijaniu)
+  let vx = Math.max(0, (scR.left - ze.left) / zoom - margin);
+  let vy = Math.max(0, (scR.top - ze.top) / zoom - margin);
+  let vw = sc.clientWidth / zoom + margin * 2;
+  let vh = sc.clientHeight / zoom + margin * 2;
+  if (hostW > 0) vw = Math.min(vw, hostW - vx);
+  if (hostH > 0) vh = Math.min(vh, hostH - vy);
+  vscode.postMessage({
+    type: "viewbox",
+    x: Math.round(vx),
+    y: Math.round(vy),
+    w: Math.max(1, Math.round(vw)),
+    h: Math.max(1, Math.round(vh)),
+    zoom,
+  });
+}
+let viewboxPending = false;
+function scheduleViewbox() {
+  if (!viewportRender || viewboxPending) return;
+  viewboxPending = true;
+  requestAnimationFrame(() => {
+    viewboxPending = false;
+    sendViewbox();
+  });
+}
 function zoomEl(): HTMLElement {
   return document.getElementById("zoom")!;
 }
@@ -1365,6 +1424,7 @@ function setZoom(z: number, anchorX?: number, anchorY?: number) {
   updateOverlay();
   drawDecorations();
   updateZoomLabel();
+  scheduleViewbox();
 }
 function updateZoomLabel() {
   const el = document.getElementById("zoom-label");
@@ -1620,6 +1680,7 @@ window.addEventListener("keydown", (e) => {
 document.getElementById("surface-scroll")!.addEventListener("scroll", () => {
   updateOverlay();
   updateRulers();
+  scheduleViewbox();
 });
 // Ctrl + kółko = zoom z zakotwiczeniem na kursorze
 document.getElementById("surface-scroll")!.addEventListener(
@@ -1672,6 +1733,10 @@ window.addEventListener("message", (e) => {
       hostPng = msg.png ?? null;
       hostW = msg.width ?? 0;
       hostH = msg.height ?? 0;
+      hostVx = msg.vx ?? 0;
+      hostVy = msg.vy ?? 0;
+      hostVw = msg.vw ?? hostW;
+      hostVh = msg.vh ?? hostH;
       hostRects.clear();
       for (const r of msg.rects ?? []) {
         const id = parseInt(String(r.uid).slice(1), 10);

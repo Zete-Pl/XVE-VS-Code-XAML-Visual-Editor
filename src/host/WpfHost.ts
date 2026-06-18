@@ -16,8 +16,12 @@ export interface RenderResult {
   ok: boolean;
   error?: string;
   png?: string;
-  width?: number;
+  width?: number; // pełny logiczny rozmiar powierzchni (design px)
   height?: number;
+  vx?: number; // wycinek (slice) w jednostkach projektu (tryb „widoczny obszar")
+  vy?: number;
+  vw?: number;
+  vh?: number;
   rects?: HostRect[];
 }
 

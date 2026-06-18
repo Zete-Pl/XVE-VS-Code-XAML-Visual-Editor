@@ -65,19 +65,32 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     post: (m: unknown) => void,
     width: number,
     height: number,
-    cap: number
+    cap: number,
+    extra: Record<string, unknown> = {}
   ): Promise<void> {
     try {
       const hostXaml = new XamlDocument(document.getText()).toHostXaml();
-      const r = await this.getHost().request({ cmd: "render", xaml: hostXaml, width, height, cap });
-      if (r.ok && r.png) {
-        post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
-      } else {
-        post({ type: "renderError", error: r.error ?? "render failed" });
-      }
+      const r = await this.getHost().request({ cmd: "render", xaml: hostXaml, width, height, cap, ...extra });
+      if (r.ok && r.png) this.postRender(post, r);
+      else post({ type: "renderError", error: r.error ?? "render failed" });
     } catch (e) {
       post({ type: "renderError", error: e instanceof Error ? e.message : String(e) });
     }
+  }
+
+  /** Wysyła wynik renderu hosta do webview (PNG + pełny rozmiar + wycinek + hit-test). */
+  private postRender(post: (m: unknown) => void, r: import("../host/WpfHost.ts").RenderResult): void {
+    post({
+      type: "render",
+      png: r.png,
+      width: r.width,
+      height: r.height,
+      vx: r.vx ?? 0,
+      vy: r.vy ?? 0,
+      vw: r.vw ?? r.width,
+      vh: r.vh ?? r.height,
+      rects: r.rects ?? [],
+    });
   }
 
   /** Podświetla w widocznych edytorach tekstu linie zmienione względem `baselineText`. */
@@ -119,6 +132,15 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     let renderCap = 2560; // limit rozdzielczości renderu hosta (px); 0 = bez limitu
     const rW = () => (useRealSize ? viewW : 1200);
     const rH = () => (useRealSize ? viewH : 900);
+    // render tylko widocznego obszaru (opcja)
+    let viewportRender = false;
+    let vbX = 0;
+    let vbY = 0;
+    let vbW = 0;
+    let vbH = 0;
+    let curZoom = 1;
+    const vbExtra = (): Record<string, unknown> =>
+      viewportRender ? { viewbox: { x: vbX, y: vbY, w: vbW, h: vbH }, zoom: curZoom } : {};
 
     const sendDoc = () => {
       const text = document.getText();
@@ -136,7 +158,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         previewMode: this.useWpfHost() ? "wpf" : "web",
       });
       this.applyInlineDiff(document, baselineText, showInlineDiff);
-      if (this.useWpfHost()) void this.renderViaHost(document, post, rW(), rH(), renderCap);
+      if (this.useWpfHost()) void this.renderViaHost(document, post, rW(), rH(), renderCap, vbExtra());
     };
 
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
@@ -221,28 +243,22 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           if (this.useWpfHost()) {
             const doc = new XamlDocument(document.getText());
             doc.setAttributes(msg.id, msg.attrs);
-            const r = await this.getHost().request({ cmd: "render", xaml: doc.toHostXaml(), width: rW(), height: rH(), cap: renderCap });
-            if (r.ok && r.png) {
-              post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
-            }
+            const r = await this.getHost().request({ cmd: "render", xaml: doc.toHostXaml(), width: rW(), height: rH(), cap: renderCap, ...vbExtra() });
+            if (r.ok && r.png) this.postRender(post, r);
           }
           break;
         case "dragStart":
           // trwała sesja: host parsuje RAZ i cache'uje żywe drzewo
           if (this.useWpfHost()) {
             const hostXaml = new XamlDocument(document.getText()).toHostXaml();
-            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: rW(), height: rH(), cap: renderCap });
-            if (r.ok && r.png) {
-              post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
-            }
+            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: rW(), height: rH(), cap: renderCap, ...vbExtra() });
+            if (r.ok && r.png) this.postRender(post, r);
           }
           break;
         case "dragUpdate":
           if (this.useWpfHost()) {
-            const r = await this.getHost().request({ cmd: "dragUpdate", uid: "u" + msg.id, attrs: msg.attrs });
-            if (r.ok && r.png) {
-              post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
-            }
+            const r = await this.getHost().request({ cmd: "dragUpdate", uid: "u" + msg.id, attrs: msg.attrs, ...vbExtra() });
+            if (r.ok && r.png) this.postRender(post, r);
           }
           break;
         case "dragEnd":
@@ -251,6 +267,20 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         case "viewport":
           if (msg.width > 0) viewW = msg.width;
           if (msg.height > 0) viewH = msg.height;
+          break;
+        case "setViewportRender":
+          viewportRender = !!msg.enabled;
+          sendDoc();
+          break;
+        case "viewbox":
+          vbX = msg.x ?? 0;
+          vbY = msg.y ?? 0;
+          vbW = msg.w ?? 0;
+          vbH = msg.h ?? 0;
+          if (typeof msg.zoom === "number" && msg.zoom > 0) curZoom = msg.zoom;
+          if (viewportRender && this.useWpfHost()) {
+            void this.renderViaHost(document, post, rW(), rH(), renderCap, vbExtra());
+          }
           break;
         case "setRealSize":
           useRealSize = !!msg.enabled;

@@ -28,6 +28,11 @@ internal static class Program
     // limit rozdzielczości bitmapy (px po dłuższym boku); <=0 = bez limitu (pełna ostrość)
     private static int _cap = 2560;
 
+    // render tylko widocznego obszaru (viewbox w jednostkach projektu) + skala zoom
+    private static bool _hasVb;
+    private static double _vbX, _vbY, _vbW, _vbH;
+    private static double _zoom = 1;
+
     // cache trwałej sesji przeciągania (jeden proces → pola statyczne)
     private static FrameworkElement? _dragRoot;
     private static Dictionary<string, FrameworkElement>? _dragMap;
@@ -50,6 +55,16 @@ internal static class Program
                 var root = docReq.RootElement;
                 id = root.TryGetProperty("id", out var idEl) ? idEl.GetInt32() : 0;
                 if (root.TryGetProperty("cap", out var capEl)) _cap = capEl.GetInt32();
+                _zoom = root.TryGetProperty("zoom", out var zEl) ? zEl.GetDouble() : 1;
+                if (root.TryGetProperty("viewbox", out var vbEl) && vbEl.ValueKind == JsonValueKind.Object)
+                {
+                    _hasVb = true;
+                    _vbX = vbEl.GetProperty("x").GetDouble();
+                    _vbY = vbEl.GetProperty("y").GetDouble();
+                    _vbW = vbEl.GetProperty("w").GetDouble();
+                    _vbH = vbEl.GetProperty("h").GetDouble();
+                }
+                else _hasVb = false;
                 var cmd = root.TryGetProperty("cmd", out var c) ? c.GetString() : null;
                 switch (cmd)
                 {
@@ -135,26 +150,11 @@ internal static class Program
         return new Surface(rootFe, pxW, pxH, rootUid);
     }
 
-    private static string RenderPng(FrameworkElement root, int pxW, int pxH)
+    private readonly record struct Rendered(
+        string Png, double Vx, double Vy, double Vw, double Vh);
+
+    private static string Encode(RenderTargetBitmap rtb)
     {
-        int cap = _cap > 0 ? _cap : int.MaxValue;
-        double scale = Math.Min(1.0, (double)cap / Math.Max(pxW, pxH));
-        RenderTargetBitmap rtb;
-        if (scale >= 1.0)
-        {
-            rtb = new RenderTargetBitmap(pxW, pxH, 96, 96, PixelFormats.Pbgra32);
-            rtb.Render(root);
-        }
-        else
-        {
-            int bw = Math.Max(1, (int)Math.Round(pxW * scale));
-            int bh = Math.Max(1, (int)Math.Round(pxH * scale));
-            rtb = new RenderTargetBitmap(bw, bh, 96, 96, PixelFormats.Pbgra32);
-            var dv = new DrawingVisual();
-            using (var dc = dv.RenderOpen())
-                dc.DrawRectangle(new VisualBrush(root) { Stretch = Stretch.Fill }, null, new Rect(0, 0, bw, bh));
-            rtb.Render(dv);
-        }
         var enc = new PngBitmapEncoder();
         enc.Frames.Add(BitmapFrame.Create(rtb));
         using var ms = new MemoryStream();
@@ -162,14 +162,76 @@ internal static class Program
         return Convert.ToBase64String(ms.ToArray());
     }
 
+    private static Rendered RenderPng(FrameworkElement root, int pxW, int pxH)
+    {
+        int cap = _cap > 0 ? _cap : int.MaxValue;
+
+        if (_hasVb)
+        {
+            // render tylko widocznego prostokąta (jednostki projektu) w skali zoom
+            double z = _zoom > 0 ? _zoom : 1;
+            int bw0 = Math.Max(1, (int)Math.Round(_vbW * z));
+            int bh0 = Math.Max(1, (int)Math.Round(_vbH * z));
+            double capScale = Math.Min(1.0, (double)cap / Math.Max(bw0, bh0));
+            int bw = Math.Max(1, (int)Math.Round(bw0 * capScale));
+            int bh = Math.Max(1, (int)Math.Round(bh0 * capScale));
+            var rtb = new RenderTargetBitmap(bw, bh, 96, 96, PixelFormats.Pbgra32);
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+                dc.DrawRectangle(
+                    new VisualBrush(root)
+                    {
+                        Viewbox = new Rect(_vbX, _vbY, _vbW, _vbH),
+                        ViewboxUnits = BrushMappingMode.Absolute,
+                        Stretch = Stretch.Fill,
+                    },
+                    null,
+                    new Rect(0, 0, bw, bh));
+            rtb.Render(dv);
+            return new Rendered(Encode(rtb), _vbX, _vbY, _vbW, _vbH);
+        }
+
+        // pełna powierzchnia (z limitem rozdzielczości)
+        double scale = Math.Min(1.0, (double)cap / Math.Max(pxW, pxH));
+        RenderTargetBitmap full;
+        if (scale >= 1.0)
+        {
+            full = new RenderTargetBitmap(pxW, pxH, 96, 96, PixelFormats.Pbgra32);
+            full.Render(root);
+        }
+        else
+        {
+            int bw = Math.Max(1, (int)Math.Round(pxW * scale));
+            int bh = Math.Max(1, (int)Math.Round(pxH * scale));
+            full = new RenderTargetBitmap(bw, bh, 96, 96, PixelFormats.Pbgra32);
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+                dc.DrawRectangle(new VisualBrush(root) { Stretch = Stretch.Fill }, null, new Rect(0, 0, bw, bh));
+            full.Render(dv);
+        }
+        return new Rendered(Encode(full), 0, 0, pxW, pxH);
+    }
+
     private static Resp RenderResult(int id, Surface s)
     {
-        string png = RenderPng(s.root, s.pxW, s.pxH);
+        var r = RenderPng(s.root, s.pxW, s.pxH);
         var rects = new List<RectInfo>();
         if (!string.IsNullOrEmpty(s.rootUid) && s.rootUid!.StartsWith("u"))
             rects.Add(new RectInfo { uid = s.rootUid, x = 0, y = 0, w = s.pxW, h = s.pxH });
         Collect(s.root, s.root, rects);
-        return new Resp { id = id, ok = true, png = png, width = s.pxW, height = s.pxH, rects = rects };
+        return new Resp
+        {
+            id = id,
+            ok = true,
+            png = r.Png,
+            width = s.pxW, // pełny logiczny rozmiar powierzchni
+            height = s.pxH,
+            vx = r.Vx,
+            vy = r.Vy,
+            vw = r.Vw,
+            vh = r.Vh,
+            rects = rects,
+        };
     }
 
     private static Resp DragUpdate(int id, string uid, JsonElement attrs)
@@ -311,8 +373,12 @@ internal static class Program
         public bool ok { get; set; }
         public string? error { get; set; }
         public string? png { get; set; }
-        public int width { get; set; }
+        public int width { get; set; } // pełny logiczny rozmiar powierzchni (design px)
         public int height { get; set; }
+        public double vx { get; set; } // wycinek (slice) w jednostkach projektu
+        public double vy { get; set; }
+        public double vw { get; set; }
+        public double vh { get; set; }
         public List<RectInfo>? rects { get; set; }
     }
 
