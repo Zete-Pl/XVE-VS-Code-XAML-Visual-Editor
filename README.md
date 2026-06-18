@@ -20,6 +20,11 @@ Zrobione:
   klikiem w linijkę (przeciąganie / podwójny klik = usuń), **snap‑grid** o konfigurowalnym
   kroku (move/resize przyciąga do siatki i prowadnic), opcjonalna **widoczna siatka**,
   pasek **narzędzi Select / Pan**.
+- **3b‑rebuild — stabilny viewport**: układ podglądu przepisany — `#surface-scroll` jest
+  `position:absolute; inset:0` (rozmiar niezależny od linijek), linijki to paski **CSS/DOM**
+  (podziałka = gradient, etykiety = DOM; bez canvas/DPI), `ResizeObserver` przerysowuje przy
+  zmianie rozmiaru okna. Działają **scrollbary** (Window > widok) i **Pan** (narzędzie + środkowy
+  przycisk myszy). Przełączniki Linijki/Prowadnice stabilne. Zoom: planowany na Etap 6.
 
 Wcześniej:
 - Custom Text Editor dla `*.xaml` (webview: drzewo struktury, podgląd, panel właściwości).

@@ -707,9 +707,10 @@ function buildPreviewTools() {
 }
 
 function applyRulersVisibility() {
-  const frame = document.getElementById("preview-frame")!;
-  frame.classList.toggle("no-rulers", !showRulers);
-  if (showRulers) drawRulers();
+  const vp = document.getElementById("preview-viewport")!;
+  vp.classList.toggle("rulers-on", showRulers);
+  vp.classList.toggle("rulers-off", !showRulers);
+  updateRulers();
 }
 function sep(): HTMLElement {
   const s = document.createElement("div");
@@ -735,79 +736,42 @@ function clientToDesign(clientX: number, clientY: number): { x: number; y: numbe
   };
 }
 
-// ---------- linijki ----------
-function sizeCanvas(c: HTMLCanvasElement): CanvasRenderingContext2D {
-  const dpr = window.devicePixelRatio || 1;
-  const w = c.clientWidth;
-  const h = c.clientHeight;
-  c.width = Math.max(1, Math.round(w * dpr));
-  c.height = Math.max(1, Math.round(h * dpr));
-  const ctx = c.getContext("2d")!;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  return ctx;
-}
 function cssVar(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
 }
-function drawRulers() {
+
+// ---------- linijki (CSS/DOM — bez canvas) ----------
+const RULER_MAJOR = 50;
+/** Synchronizuje podziałkę (tło) ze scrollem i przerysowuje etykiety. */
+function updateRulers() {
   if (!showRulers) return;
-  const top = document.getElementById("ruler-top") as HTMLCanvasElement;
-  const left = document.getElementById("ruler-left") as HTMLCanvasElement;
-  if (!top || !left) return;
   const sc = scrollEl();
   const s = surfaceEl();
-  const fg = cssVar("--vscode-foreground", "#888");
-  const originX = s.offsetLeft - sc.scrollLeft;
+  const originX = s.offsetLeft - sc.scrollLeft; // px do design-0 względem lewej krawędzi paska
   const originY = s.offsetTop - sc.scrollTop;
-  drawRulerAxis(sizeCanvas(top), "x", originX, top.clientWidth, top.clientHeight, fg);
-  drawRulerAxis(sizeCanvas(left), "y", originY, left.clientHeight, left.clientWidth, fg);
+  const topTicks = document.getElementById("ruler-top-ticks");
+  const leftTicks = document.getElementById("ruler-left-ticks");
+  if (topTicks) topTicks.style.backgroundPositionX = `${originX}px, ${originX}px`;
+  if (leftTicks) leftTicks.style.backgroundPositionY = `${originY}px, ${originY}px`;
+  buildAxisLabels(document.getElementById("ruler-top-labels"), "x", originX);
+  buildAxisLabels(document.getElementById("ruler-left-labels"), "y", originY);
 }
-function drawRulerAxis(
-  ctx: CanvasRenderingContext2D,
-  axis: "x" | "y",
-  origin: number,
-  length: number,
-  thickness: number,
-  color: string
-) {
-  const minor = 10;
-  const major = 50;
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.globalAlpha = 0.6;
-  ctx.font = "9px sans-serif";
-  ctx.lineWidth = 1;
-  const startC = Math.floor((0 - origin) / minor) * minor;
-  const endC = Math.ceil((length - origin) / minor) * minor;
-  ctx.beginPath();
-  for (let c = startC; c <= endC; c += minor) {
-    const p = Math.round(origin + c) + 0.5;
-    const len = c % major === 0 ? thickness : 4;
-    if (axis === "x") {
-      ctx.moveTo(p, thickness - len);
-      ctx.lineTo(p, thickness);
-    } else {
-      ctx.moveTo(thickness - len, p);
-      ctx.lineTo(thickness, p);
-    }
-  }
-  ctx.stroke();
-  ctx.globalAlpha = 0.9;
-  // etykiety wyłącznie na wielokrotnościach `major`, wyrównane do 0
-  const labelStart = Math.ceil(startC / major) * major;
-  for (let c = labelStart; c <= endC; c += major) {
-    const p = Math.round(origin + c);
-    if (axis === "x") {
-      ctx.fillText(String(c), p + 2, 8);
-    } else {
-      ctx.save();
-      ctx.translate(8, p + 2);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillText(String(c), 0, 0);
-      ctx.restore();
-    }
+function buildAxisLabels(host: HTMLElement | null, axis: "x" | "y", origin: number) {
+  if (!host) return;
+  const length = axis === "x" ? host.clientWidth : host.clientHeight;
+  host.innerHTML = "";
+  if (length <= 0) return;
+  const startC = Math.ceil((2 - origin) / RULER_MAJOR) * RULER_MAJOR;
+  const endC = Math.floor((length - 2 - origin) / RULER_MAJOR) * RULER_MAJOR;
+  for (let c = startC; c <= endC; c += RULER_MAJOR) {
+    const p = origin + c;
+    const span = document.createElement("span");
+    span.className = "ruler-label";
+    span.textContent = String(c);
+    if (axis === "x") span.style.left = p + 2 + "px";
+    else span.style.top = p + "px";
+    host.appendChild(span);
   }
 }
 
@@ -849,7 +813,7 @@ function renderGuides() {
   });
 }
 function drawDecorations() {
-  drawRulers();
+  updateRulers();
   renderGrid();
   renderGuides();
 }
@@ -891,7 +855,7 @@ function startPan(e: MouseEvent) {
 
 // klik w podglądzie → pan / zaznaczenie + start przeciągania
 document.getElementById("surface")!.addEventListener("mousedown", (e) => {
-  if (tool === "pan") {
+  if (tool === "pan" || e.button === 1) {
     e.preventDefault();
     startPan(e);
     return;
@@ -955,14 +919,28 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-window.addEventListener("resize", () => {
-  updateOverlay();
-  drawDecorations();
-});
 document.getElementById("surface-scroll")!.addEventListener("scroll", () => {
   updateOverlay();
-  drawRulers();
+  updateRulers();
 });
+
+// Stabilne odświeżanie przy zmianie rozmiaru viewportu (resize okna VS Code,
+// przełączanie paneli, toggle linijek) — debounce przez requestAnimationFrame.
+let decoPending = false;
+function scheduleDecorations() {
+  if (decoPending) return;
+  decoPending = true;
+  requestAnimationFrame(() => {
+    decoPending = false;
+    updateOverlay();
+    drawDecorations();
+  });
+}
+window.addEventListener("resize", scheduleDecorations);
+const viewport = document.getElementById("preview-viewport");
+if (viewport && typeof ResizeObserver !== "undefined") {
+  new ResizeObserver(scheduleDecorations).observe(viewport);
+}
 buildHandles();
 
 window.addEventListener("message", (e) => {

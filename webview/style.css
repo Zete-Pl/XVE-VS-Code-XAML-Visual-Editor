@@ -120,47 +120,115 @@ body {
   padding: 1px 4px;
 }
 
-#preview-frame {
+/* Szerokość pasków linijek; w trybie bez linijek = 0 */
+#preview-viewport {
+  --rw: 20px;
+  position: relative;
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: 22px 1fr;
-  grid-template-rows: 22px 1fr;
+  overflow: hidden;
 }
-#ruler-corner {
-  background: var(--vscode-editorWidget-background, #00000022);
-  border-right: 1px solid var(--vscode-panel-border);
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-#ruler-top,
-#ruler-left {
-  display: block;
-  background: var(--vscode-editorWidget-background, #00000016);
-  cursor: crosshair;
-}
-#ruler-top {
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-#ruler-left {
-  border-right: 1px solid var(--vscode-panel-border);
-}
-#preview-frame.no-rulers {
-  grid-template-columns: 0 1fr;
-  grid-template-rows: 0 1fr;
-}
-#preview-frame.no-rulers #ruler-top,
-#preview-frame.no-rulers #ruler-left,
-#preview-frame.no-rulers #ruler-corner {
-  display: none;
+#preview-viewport.rulers-off {
+  --rw: 0px;
 }
 
-/* ---------- powierzchnia podglądu ---------- */
+/* Powierzchnia wypełnia viewport (z miejscem na paski przez --rw); rozmiar NIEZALEŻNY od linijek */
 #surface-scroll {
-  position: relative;
+  position: absolute;
+  top: var(--rw);
+  left: var(--rw);
+  right: 0;
+  bottom: 0;
   overflow: auto;
   padding: 24px;
   background:
     repeating-conic-gradient(var(--vscode-editorWidget-background, #80808022) 0% 25%, transparent 0% 50%) 50% / 16px 16px;
+}
+
+/* Paski linijek — nakładkowe, o stałej szerokości, z przycięciem zawartości */
+#ruler-corner,
+#ruler-top,
+#ruler-left {
+  position: absolute;
+  background: var(--vscode-editorWidget-background, #00000016);
+  overflow: hidden;
+  z-index: 5;
+}
+#ruler-corner {
+  top: 0;
+  left: 0;
+  width: var(--rw);
+  height: var(--rw);
+  border-right: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+#ruler-top {
+  top: 0;
+  left: var(--rw);
+  right: 0;
+  height: var(--rw);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  cursor: crosshair;
+}
+#ruler-left {
+  top: var(--rw);
+  left: 0;
+  bottom: 0;
+  width: var(--rw);
+  border-right: 1px solid var(--vscode-panel-border);
+  cursor: crosshair;
+}
+#preview-viewport.rulers-off #ruler-top,
+#preview-viewport.rulers-off #ruler-left,
+#preview-viewport.rulers-off #ruler-corner {
+  display: none;
+}
+
+/* Podziałka jako warstwy gradientów: minor co 10px (niski), major co 50px (wyższy) */
+#ruler-top-ticks,
+#ruler-left-ticks {
+  position: absolute;
+  inset: 0;
+}
+#ruler-top-ticks {
+  background-image:
+    linear-gradient(90deg, var(--vscode-foreground) 0 1px, transparent 1px),
+    linear-gradient(90deg, var(--vscode-foreground) 0 1px, transparent 1px);
+  background-repeat: repeat-x, repeat-x;
+  background-size: 10px 5px, 50px 10px;
+  background-position: 0 bottom, 0 bottom;
+  opacity: 0.55;
+}
+#ruler-left-ticks {
+  background-image:
+    linear-gradient(0deg, var(--vscode-foreground) 0 1px, transparent 1px),
+    linear-gradient(0deg, var(--vscode-foreground) 0 1px, transparent 1px);
+  background-repeat: repeat-y, repeat-y;
+  background-size: 5px 10px, 10px 50px;
+  background-position: right 0, right 0;
+  opacity: 0.55;
+}
+#ruler-top-labels,
+#ruler-left-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ruler-label {
+  position: absolute;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--vscode-foreground);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+#ruler-top-labels .ruler-label {
+  top: 2px;
+}
+#ruler-left-labels .ruler-label {
+  left: 2px;
+  transform: rotate(-90deg);
+  transform-origin: left top;
 }
 #grid-layer {
   position: absolute;
