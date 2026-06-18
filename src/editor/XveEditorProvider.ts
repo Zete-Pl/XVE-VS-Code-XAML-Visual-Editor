@@ -60,10 +60,15 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
   }
 
   /** Renderuje bieżący dokument przez host WPF i wysyła PNG + mapę hit-test do webview. */
-  private async renderViaHost(document: vscode.TextDocument, post: (m: unknown) => void): Promise<void> {
+  private async renderViaHost(
+    document: vscode.TextDocument,
+    post: (m: unknown) => void,
+    width: number,
+    height: number
+  ): Promise<void> {
     try {
       const hostXaml = new XamlDocument(document.getText()).toHostXaml();
-      const r = await this.getHost().render(hostXaml, 1200, 900);
+      const r = await this.getHost().render(hostXaml, width, height);
       if (r.ok && r.png) {
         post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
       } else {
@@ -106,6 +111,9 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     // baseline = ostatnio zapisana zawartość (przy otwarciu == zawartość na dysku)
     let baselineText = document.getText();
     let showInlineDiff = true; // przełącznik z widoku Changes (domyślnie włączony)
+    // realny rozmiar powierzchni podglądu (fallback dla korzeni bez Width/Height)
+    let viewW = 1200;
+    let viewH = 900;
 
     const sendDoc = () => {
       const text = document.getText();
@@ -123,7 +131,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         previewMode: this.useWpfHost() ? "wpf" : "web",
       });
       this.applyInlineDiff(document, baselineText, showInlineDiff);
-      if (this.useWpfHost()) void this.renderViaHost(document, post);
+      if (this.useWpfHost()) void this.renderViaHost(document, post, viewW, viewH);
     };
 
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
@@ -208,7 +216,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           if (this.useWpfHost()) {
             const doc = new XamlDocument(document.getText());
             doc.setAttributes(msg.id, msg.attrs);
-            const r = await this.getHost().render(doc.toHostXaml(), 1200, 900);
+            const r = await this.getHost().render(doc.toHostXaml(), viewW, viewH);
             if (r.ok && r.png) {
               post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
             }
@@ -218,7 +226,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           // trwała sesja: host parsuje RAZ i cache'uje żywe drzewo
           if (this.useWpfHost()) {
             const hostXaml = new XamlDocument(document.getText()).toHostXaml();
-            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: 1200, height: 900 });
+            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: viewW, height: viewH });
             if (r.ok && r.png) {
               post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
             }
@@ -234,6 +242,10 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           break;
         case "dragEnd":
           if (this.useWpfHost()) void this.getHost().request({ cmd: "dragEnd" });
+          break;
+        case "viewport":
+          if (msg.width > 0) viewW = msg.width;
+          if (msg.height > 0) viewH = msg.height;
           break;
         case "setBackend": {
           const value = ["auto", "web", "wpf-host"].includes(msg.value) ? msg.value : "auto";

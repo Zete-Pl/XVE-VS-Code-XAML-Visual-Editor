@@ -841,7 +841,9 @@ let dragLatestAttrs: Record<string, string> | null = null;
 let dragRaf = 0;
 let dragFrameCount = 0;
 let dragLastSent = 0;
+let dragLastFrameSent = 0;
 let dragSessionActive = false;
+let renderInFlight = false; // koalescencja: najwyżej jedna klatka „w locie"
 
 function pngMode(): boolean {
   return previewMode === "wpf" && !!hostPng;
@@ -888,10 +890,27 @@ function setOverlayDesignRect(x: number, y: number, w: number, h: number) {
 
 // Pompa re-renderu na żywo (tylko tryb PNG + strategia frames/ms). Wysyła do hosta
 // PODGLĄD (previewDrag) bez commitu do dokumentu — finalny zapis dopiero po puszczeniu.
+/** Wysyła klatkę podglądu, jeśli pozwala odstęp (klatki/ms) i nic nie jest „w locie". */
+function trySendDragFrame(now: number) {
+  if (!drag || !dragLatestAttrs || renderInFlight) return;
+  const spacingOk =
+    dragPreviewMode === "frames"
+      ? dragFrameCount - dragLastFrameSent >= Math.max(1, dragFrames)
+      : now - dragLastSent >= Math.max(1, dragMs);
+  if (!spacingOk) return;
+  dragLastSent = now;
+  dragLastFrameSent = dragFrameCount;
+  renderInFlight = true;
+  if (dragSessionActive) vscode.postMessage({ type: "dragUpdate", id: drag.id, attrs: dragLatestAttrs });
+  else vscode.postMessage({ type: "previewDrag", id: drag.id, attrs: dragLatestAttrs });
+}
+
 function startDragPump() {
   if (!pngMode() || dragPreviewMode === "overlay") return;
   dragFrameCount = 0;
+  dragLastFrameSent = 0;
   dragLastSent = performance.now();
+  renderInFlight = false;
   dragSessionActive = dragSession;
   // trwała sesja: host parsuje RAZ na początku gestu
   if (dragSessionActive && drag) vscode.postMessage({ type: "dragStart", id: drag.id });
@@ -901,15 +920,7 @@ function startDragPump() {
       return;
     }
     dragFrameCount++;
-    const send =
-      dragPreviewMode === "frames"
-        ? dragFrameCount % Math.max(1, dragFrames) === 0
-        : t - dragLastSent >= Math.max(1, dragMs);
-    if (send && dragLatestAttrs && drag) {
-      dragLastSent = t;
-      if (dragSessionActive) vscode.postMessage({ type: "dragUpdate", id: drag.id, attrs: dragLatestAttrs });
-      else vscode.postMessage({ type: "previewDrag", id: drag.id, attrs: dragLatestAttrs });
-    }
+    trySendDragFrame(t);
     dragRaf = requestAnimationFrame(tick);
   };
   dragRaf = requestAnimationFrame(tick);
@@ -917,6 +928,7 @@ function startDragPump() {
 function stopDragPump() {
   if (dragRaf) cancelAnimationFrame(dragRaf);
   dragRaf = 0;
+  renderInFlight = false;
   if (dragSessionActive) {
     vscode.postMessage({ type: "dragEnd" });
     dragSessionActive = false;
@@ -1221,6 +1233,14 @@ function surfaceEl(): HTMLElement {
 function scrollEl(): HTMLElement {
   return document.getElementById("surface-scroll")!;
 }
+/** Zgłasza realny rozmiar powierzchni podglądu (px, bez paddingu) — host użyje go jako
+ * fallbacku dla korzeni bez jawnego Width/Height zamiast sztywnego 1200×900. */
+function reportViewport() {
+  const sc = scrollEl();
+  const w = Math.max(1, Math.round(sc.clientWidth - 48));
+  const h = Math.max(1, Math.round(sc.clientHeight - 48));
+  vscode.postMessage({ type: "viewport", width: w, height: h });
+}
 /** Współrzędna projektowa z pozycji myszy (0,0 = lewy-górny róg powierzchni). */
 function clientToDesign(clientX: number, clientY: number): { x: number; y: number } {
   const sc = scrollEl();
@@ -1484,6 +1504,7 @@ function scheduleDecorations() {
     decoPending = false;
     updateOverlay();
     drawDecorations();
+    reportViewport();
   });
 }
 window.addEventListener("resize", scheduleDecorations);
@@ -1492,6 +1513,7 @@ if (viewport && typeof ResizeObserver !== "undefined") {
   new ResizeObserver(scheduleDecorations).observe(viewport);
 }
 buildHandles();
+requestAnimationFrame(reportViewport);
 
 window.addEventListener("message", (e) => {
   const msg = e.data;
@@ -1516,7 +1538,16 @@ window.addEventListener("message", (e) => {
         const id = parseInt(String(r.uid).slice(1), 10);
         if (!isNaN(id)) hostRects.set(id, { x: r.x, y: r.y, w: r.w, h: r.h });
       }
-      if (previewMode === "wpf") renderPreview();
+      // klatka wróciła → zwolnij „in-flight" i ewentualnie wyślij najnowszy stan
+      renderInFlight = false;
+      if (drag) {
+        trySendDragFrame(performance.now());
+        // podczas drag nie przebudowujemy całego podglądu (overlay już jedzie),
+        // ale przy aktywnym renderze w trybie PNG odśwież obraz
+        if (previewMode === "wpf") renderPreview();
+      } else if (previewMode === "wpf") {
+        renderPreview();
+      }
       break;
     case "renderError":
       hostPng = null; // spadek na renderer web
