@@ -77,10 +77,11 @@ export class WpfHost {
     }
   }
 
-  render(xaml: string, width: number, height: number, timeoutMs = 6000): Promise<RenderResult> {
+  /** Wysyła dowolne żądanie (cmd + payload), koreluje odpowiedź po id. */
+  request(payload: Record<string, unknown>, timeoutMs = 6000): Promise<RenderResult> {
     if (!this.ensure() || !this.proc) return Promise.resolve({ ok: false, error: "host unavailable" });
     const id = this.seq++;
-    const req = JSON.stringify({ id, cmd: "render", xaml, width, height }) + "\n";
+    const req = JSON.stringify({ id, ...payload }) + "\n";
     return new Promise<RenderResult>((resolve) => {
       const timer = setTimeout(() => {
         if (this.pending.delete(id)) resolve({ ok: false, error: "host timeout" });
@@ -97,6 +98,10 @@ export class WpfHost {
         resolve({ ok: false, error: "host write failed" });
       }
     });
+  }
+
+  render(xaml: string, width: number, height: number): Promise<RenderResult> {
+    return this.request({ cmd: "render", xaml, width, height });
   }
 
   dispose() {

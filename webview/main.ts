@@ -36,7 +36,8 @@ const hostRects = new Map<number, { x: number; y: number; w: number; h: number }
 // strategia podglądu przeciągania w trybie PNG (host WPF)
 let dragPreviewMode: "overlay" | "frames" | "ms" = "overlay";
 let dragFrames = 2; // co ile klatek re-render
-let dragMs = 50; // co ile ms re-render
+let dragMs = 25; // co ile ms re-render
+let dragSession = true; // trwała sesja hosta (szybciej) vs pełny re-render co klatkę
 const nodeById = new Map<number, RenderNode>();
 const parentById = new Map<number, RenderNode | null>();
 let clipboardXml: string | null = null;
@@ -571,7 +572,10 @@ function buildSettings() {
   }
   panel.appendChild(sec);
 
-  // strategia podglądu przeciągania (dotyczy trybu WPF host / PNG)
+  // strategia podglądu przeciągania — tylko gdy aktywny host WPF
+  const wpfActive = isWindows && (backend === "wpf-host" || backend === "auto");
+  if (!wpfActive) return;
+
   const drag = document.createElement("div");
   drag.className = "settings-section";
   const dlabel = document.createElement("div");
@@ -614,6 +618,18 @@ function buildSettings() {
     }
     drag.appendChild(row);
   }
+  // metoda re-renderu na żywo: trwała sesja hosta (szybciej) vs pełny re-render co klatkę
+  const sessRow = document.createElement("label");
+  sessRow.className = "settings-radio";
+  const sessCb = document.createElement("input");
+  sessCb.type = "checkbox";
+  sessCb.checked = dragSession;
+  sessCb.onchange = () => {
+    dragSession = sessCb.checked;
+  };
+  sessRow.append(sessCb, document.createTextNode(T("Drag.Session")));
+  drag.appendChild(sessRow);
+
   const dnote = document.createElement("div");
   dnote.className = "settings-note";
   dnote.textContent = T("Drag.Note");
@@ -825,6 +841,7 @@ let dragLatestAttrs: Record<string, string> | null = null;
 let dragRaf = 0;
 let dragFrameCount = 0;
 let dragLastSent = 0;
+let dragSessionActive = false;
 
 function pngMode(): boolean {
   return previewMode === "wpf" && !!hostPng;
@@ -875,6 +892,9 @@ function startDragPump() {
   if (!pngMode() || dragPreviewMode === "overlay") return;
   dragFrameCount = 0;
   dragLastSent = performance.now();
+  dragSessionActive = dragSession;
+  // trwała sesja: host parsuje RAZ na początku gestu
+  if (dragSessionActive && drag) vscode.postMessage({ type: "dragStart", id: drag.id });
   const tick = (t: number) => {
     if (!drag) {
       dragRaf = 0;
@@ -885,9 +905,10 @@ function startDragPump() {
       dragPreviewMode === "frames"
         ? dragFrameCount % Math.max(1, dragFrames) === 0
         : t - dragLastSent >= Math.max(1, dragMs);
-    if (send && dragLatestAttrs) {
+    if (send && dragLatestAttrs && drag) {
       dragLastSent = t;
-      vscode.postMessage({ type: "previewDrag", id: drag.id, attrs: dragLatestAttrs });
+      if (dragSessionActive) vscode.postMessage({ type: "dragUpdate", id: drag.id, attrs: dragLatestAttrs });
+      else vscode.postMessage({ type: "previewDrag", id: drag.id, attrs: dragLatestAttrs });
     }
     dragRaf = requestAnimationFrame(tick);
   };
@@ -896,6 +917,10 @@ function startDragPump() {
 function stopDragPump() {
   if (dragRaf) cancelAnimationFrame(dragRaf);
   dragRaf = 0;
+  if (dragSessionActive) {
+    vscode.postMessage({ type: "dragEnd" });
+    dragSessionActive = false;
+  }
 }
 
 function onDragMove(e: MouseEvent) {

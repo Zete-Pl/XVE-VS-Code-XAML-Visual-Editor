@@ -54,10 +54,9 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     return this.host;
   }
   private useWpfHost(): boolean {
-    return (
-      process.platform === "win32" &&
-      vscode.workspace.getConfiguration("xve").get<string>("previewBackend") === "wpf-host"
-    );
+    if (process.platform !== "win32") return false;
+    const cfg = vscode.workspace.getConfiguration("xve").get<string>("previewBackend") || "auto";
+    return cfg === "wpf-host" || cfg === "auto"; // Auto na Windows = host WPF
   }
 
   /** Renderuje bieżący dokument przez host WPF i wysyła PNG + mapę hit-test do webview. */
@@ -205,17 +204,36 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           this.revealNode(document, msg.id);
           break;
         case "previewDrag":
-          // podgląd przeciągania w trybie PNG: zastosuj atrybuty na KOPII (bez commitu
-          // do dokumentu) i przerysuj obraz hosta
+          // podgląd przeciągania (pełny re-render na kopii dokumentu, bez commitu)
           if (this.useWpfHost()) {
             const doc = new XamlDocument(document.getText());
             doc.setAttributes(msg.id, msg.attrs);
-            const hostXaml = doc.toHostXaml();
-            const r = await this.getHost().render(hostXaml, 1200, 900);
+            const r = await this.getHost().render(doc.toHostXaml(), 1200, 900);
             if (r.ok && r.png) {
               post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
             }
           }
+          break;
+        case "dragStart":
+          // trwała sesja: host parsuje RAZ i cache'uje żywe drzewo
+          if (this.useWpfHost()) {
+            const hostXaml = new XamlDocument(document.getText()).toHostXaml();
+            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: 1200, height: 900 });
+            if (r.ok && r.png) {
+              post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
+            }
+          }
+          break;
+        case "dragUpdate":
+          if (this.useWpfHost()) {
+            const r = await this.getHost().request({ cmd: "dragUpdate", uid: "u" + msg.id, attrs: msg.attrs });
+            if (r.ok && r.png) {
+              post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
+            }
+          }
+          break;
+        case "dragEnd":
+          if (this.useWpfHost()) void this.getHost().request({ cmd: "dragEnd" });
           break;
         case "setBackend": {
           const value = ["auto", "web", "wpf-host"].includes(msg.value) ? msg.value : "auto";

@@ -35,6 +35,7 @@ const MAP: Record<string, string[]> = {
   "Drag.Frames": ["Live re-render every", "Re-render na żywo co", "Recomponer en vivo cada", "Live neu rendern alle", "Re-rendu en direct toutes les", "ライブ再描画", "实时重绘每"],
   "Drag.Ms": ["Live re-render every", "Re-render na żywo co", "Recomponer en vivo cada", "Live neu rendern alle", "Re-rendu en direct toutes les", "ライブ再描画", "实时重绘每"],
   "Drag.UnitFrames": ["frames", "klatek", "fotogramas", "Frames", "images", "フレーム", "帧"],
+  "Drag.Session": ["Persistent host session (faster)", "Trwała sesja hosta (szybciej)", "Sesión persistente del host (más rápido)", "Persistente Host-Sitzung (schneller)", "Session d'hôte persistante (plus rapide)", "永続ホストセッション（高速）", "持久宿主会话（更快）"],
   "Drag.Note": ["Applies to WPF host (PNG) mode. Web mode is always live.", "Dotyczy trybu WPF host (PNG). Tryb web jest zawsze na żywo.", "Se aplica al modo WPF host (PNG). El modo web siempre es en vivo.", "Gilt für WPF-Host (PNG). Web-Modus ist immer live.", "S'applique au mode hôte WPF (PNG). Le mode web est toujours en direct.", "WPF ホスト（PNG）モードに適用。Web モードは常にライブ。", "适用于 WPF 宿主（PNG）模式。Web 模式始终为实时。"],
   "View.NoSelection": ["No element selected", "Nie wybrano elementu", "Ningún elemento seleccionado", "Kein Element ausgewählt", "Aucun élément sélectionné", "要素が選択されていません", "未选择元素"],
   "Prop.Add": ["Add property…", "Dodaj właściwość…", "Agregar propiedad…", "Eigenschaft hinzufügen…", "Ajouter une propriété…", "プロパティを追加…", "添加属性…"],
