@@ -38,6 +38,8 @@ let dragPreviewMode: "overlay" | "frames" | "ms" = "overlay";
 let dragFrames = 2; // co ile klatek re-render
 let dragMs = 25; // co ile ms re-render
 let dragSession = true; // trwała sesja hosta (szybciej) vs pełny re-render co klatkę
+let dragCoalesce = true; // koalescencja: tylko 1 klatka „w locie" (odrzuca zaległe)
+let dragRealSize = true; // render w rzeczywistym rozmiarze viewportu vs sztywne 1200×900
 const nodeById = new Map<number, RenderNode>();
 const parentById = new Map<number, RenderNode | null>();
 let clipboardXml: string | null = null;
@@ -630,6 +632,31 @@ function buildSettings() {
   sessRow.append(sessCb, document.createTextNode(T("Drag.Session")));
   drag.appendChild(sessRow);
 
+  // koalescencja in-flight (odrzucanie zaległych klatek)
+  const coalRow = document.createElement("label");
+  coalRow.className = "settings-radio";
+  const coalCb = document.createElement("input");
+  coalCb.type = "checkbox";
+  coalCb.checked = dragCoalesce;
+  coalCb.onchange = () => {
+    dragCoalesce = coalCb.checked;
+  };
+  coalRow.append(coalCb, document.createTextNode(T("Drag.Coalesce")));
+  drag.appendChild(coalRow);
+
+  // render w rzeczywistym rozmiarze viewportu
+  const sizeRow = document.createElement("label");
+  sizeRow.className = "settings-radio";
+  const sizeCb = document.createElement("input");
+  sizeCb.type = "checkbox";
+  sizeCb.checked = dragRealSize;
+  sizeCb.onchange = () => {
+    dragRealSize = sizeCb.checked;
+    vscode.postMessage({ type: "setRealSize", enabled: dragRealSize });
+  };
+  sizeRow.append(sizeCb, document.createTextNode(T("Drag.RealSize")));
+  drag.appendChild(sizeRow);
+
   const dnote = document.createElement("div");
   dnote.className = "settings-note";
   dnote.textContent = T("Drag.Note");
@@ -892,7 +919,8 @@ function setOverlayDesignRect(x: number, y: number, w: number, h: number) {
 // PODGLĄD (previewDrag) bez commitu do dokumentu — finalny zapis dopiero po puszczeniu.
 /** Wysyła klatkę podglądu, jeśli pozwala odstęp (klatki/ms) i nic nie jest „w locie". */
 function trySendDragFrame(now: number) {
-  if (!drag || !dragLatestAttrs || renderInFlight) return;
+  if (!drag || !dragLatestAttrs) return;
+  if (dragCoalesce && renderInFlight) return; // koalescencja: czekaj na powrót klatki
   const spacingOk =
     dragPreviewMode === "frames"
       ? dragFrameCount - dragLastFrameSent >= Math.max(1, dragFrames)

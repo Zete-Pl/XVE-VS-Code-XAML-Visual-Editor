@@ -114,6 +114,9 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     // realny rozmiar powierzchni podglądu (fallback dla korzeni bez Width/Height)
     let viewW = 1200;
     let viewH = 900;
+    let useRealSize = true; // przełącznik z ustawień: realny viewport vs sztywne 1200×900
+    const rW = () => (useRealSize ? viewW : 1200);
+    const rH = () => (useRealSize ? viewH : 900);
 
     const sendDoc = () => {
       const text = document.getText();
@@ -131,7 +134,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         previewMode: this.useWpfHost() ? "wpf" : "web",
       });
       this.applyInlineDiff(document, baselineText, showInlineDiff);
-      if (this.useWpfHost()) void this.renderViaHost(document, post, viewW, viewH);
+      if (this.useWpfHost()) void this.renderViaHost(document, post, rW(), rH());
     };
 
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
@@ -216,7 +219,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           if (this.useWpfHost()) {
             const doc = new XamlDocument(document.getText());
             doc.setAttributes(msg.id, msg.attrs);
-            const r = await this.getHost().render(doc.toHostXaml(), viewW, viewH);
+            const r = await this.getHost().render(doc.toHostXaml(), rW(), rH());
             if (r.ok && r.png) {
               post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
             }
@@ -226,7 +229,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           // trwała sesja: host parsuje RAZ i cache'uje żywe drzewo
           if (this.useWpfHost()) {
             const hostXaml = new XamlDocument(document.getText()).toHostXaml();
-            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: viewW, height: viewH });
+            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: rW(), height: rH() });
             if (r.ok && r.png) {
               post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
             }
@@ -246,6 +249,10 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         case "viewport":
           if (msg.width > 0) viewW = msg.width;
           if (msg.height > 0) viewH = msg.height;
+          break;
+        case "setRealSize":
+          useRealSize = !!msg.enabled;
+          sendDoc();
           break;
         case "setBackend": {
           const value = ["auto", "web", "wpf-host"].includes(msg.value) ? msg.value : "auto";
