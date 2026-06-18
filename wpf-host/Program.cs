@@ -25,6 +25,9 @@ internal static class Program
     private static readonly XNamespace XamlNs = "http://schemas.microsoft.com/winfx/2006/xaml";
     private static Dictionary<string, Type>? _typeIndex;
 
+    // limit rozdzielczości bitmapy (px po dłuższym boku); <=0 = bez limitu (pełna ostrość)
+    private static int _cap = 2560;
+
     // cache trwałej sesji przeciągania (jeden proces → pola statyczne)
     private static FrameworkElement? _dragRoot;
     private static Dictionary<string, FrameworkElement>? _dragMap;
@@ -46,6 +49,7 @@ internal static class Program
                 using var docReq = JsonDocument.Parse(line);
                 var root = docReq.RootElement;
                 id = root.TryGetProperty("id", out var idEl) ? idEl.GetInt32() : 0;
+                if (root.TryGetProperty("cap", out var capEl)) _cap = capEl.GetInt32();
                 var cmd = root.TryGetProperty("cmd", out var c) ? c.GetString() : null;
                 switch (cmd)
                 {
@@ -131,13 +135,10 @@ internal static class Program
         return new Surface(rootFe, pxW, pxH, rootUid);
     }
 
-    // Górny limit rozdzielczości bitmapy — koszt rasteryzacji/PNG/transferu stały
-    // niezależnie od rozmiaru okna. Webview wyświetla w rozmiarze logicznym (upscale).
-    private const int RenderCap = 2560;
-
     private static string RenderPng(FrameworkElement root, int pxW, int pxH)
     {
-        double scale = Math.Min(1.0, (double)RenderCap / Math.Max(pxW, pxH));
+        int cap = _cap > 0 ? _cap : int.MaxValue;
+        double scale = Math.Min(1.0, (double)cap / Math.Max(pxW, pxH));
         RenderTargetBitmap rtb;
         if (scale >= 1.0)
         {

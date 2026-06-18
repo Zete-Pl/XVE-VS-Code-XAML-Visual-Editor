@@ -40,6 +40,7 @@ let dragMs = 25; // co ile ms re-render
 let dragSession = true; // trwała sesja hosta (szybciej) vs pełny re-render co klatkę
 let dragCoalesce = true; // koalescencja: tylko 1 klatka „w locie" (odrzuca zaległe)
 let dragRealSize = true; // render w rzeczywistym rozmiarze viewportu vs sztywne 1200×900
+let renderCap = 2560; // limit rozdzielczości renderu hosta (px); 0 = bez limitu
 const nodeById = new Map<number, RenderNode>();
 const parentById = new Map<number, RenderNode | null>();
 let clipboardXml: string | null = null;
@@ -656,6 +657,25 @@ function buildSettings() {
   };
   sizeRow.append(sizeCb, document.createTextNode(T("Drag.RealSize")));
   drag.appendChild(sizeRow);
+
+  // limit rozdzielczości renderu (px po dłuższym boku; 0 = bez limitu, pełna ostrość)
+  const capRow = document.createElement("label");
+  capRow.className = "settings-radio";
+  const capInp = document.createElement("input");
+  capInp.type = "number";
+  capInp.min = "0";
+  capInp.step = "256";
+  capInp.className = "tool-num";
+  capInp.value = String(renderCap);
+  capInp.onchange = () => {
+    const v = parseInt(capInp.value, 10);
+    if (!isNaN(v) && v >= 0) {
+      renderCap = v;
+      vscode.postMessage({ type: "setRenderCap", value: renderCap });
+    }
+  };
+  capRow.append(document.createTextNode(T("Drag.MaxRes")), capInp, document.createTextNode("px"));
+  drag.appendChild(capRow);
 
   const dnote = document.createElement("div");
   dnote.className = "settings-note";

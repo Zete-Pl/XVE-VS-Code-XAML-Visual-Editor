@@ -64,11 +64,12 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     document: vscode.TextDocument,
     post: (m: unknown) => void,
     width: number,
-    height: number
+    height: number,
+    cap: number
   ): Promise<void> {
     try {
       const hostXaml = new XamlDocument(document.getText()).toHostXaml();
-      const r = await this.getHost().render(hostXaml, width, height);
+      const r = await this.getHost().request({ cmd: "render", xaml: hostXaml, width, height, cap });
       if (r.ok && r.png) {
         post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
       } else {
@@ -115,6 +116,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     let viewW = 1200;
     let viewH = 900;
     let useRealSize = true; // przełącznik z ustawień: realny viewport vs sztywne 1200×900
+    let renderCap = 2560; // limit rozdzielczości renderu hosta (px); 0 = bez limitu
     const rW = () => (useRealSize ? viewW : 1200);
     const rH = () => (useRealSize ? viewH : 900);
 
@@ -134,7 +136,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         previewMode: this.useWpfHost() ? "wpf" : "web",
       });
       this.applyInlineDiff(document, baselineText, showInlineDiff);
-      if (this.useWpfHost()) void this.renderViaHost(document, post, rW(), rH());
+      if (this.useWpfHost()) void this.renderViaHost(document, post, rW(), rH(), renderCap);
     };
 
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
@@ -219,7 +221,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           if (this.useWpfHost()) {
             const doc = new XamlDocument(document.getText());
             doc.setAttributes(msg.id, msg.attrs);
-            const r = await this.getHost().render(doc.toHostXaml(), rW(), rH());
+            const r = await this.getHost().request({ cmd: "render", xaml: doc.toHostXaml(), width: rW(), height: rH(), cap: renderCap });
             if (r.ok && r.png) {
               post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
             }
@@ -229,7 +231,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           // trwała sesja: host parsuje RAZ i cache'uje żywe drzewo
           if (this.useWpfHost()) {
             const hostXaml = new XamlDocument(document.getText()).toHostXaml();
-            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: rW(), height: rH() });
+            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: rW(), height: rH(), cap: renderCap });
             if (r.ok && r.png) {
               post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
             }
@@ -252,6 +254,10 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           break;
         case "setRealSize":
           useRealSize = !!msg.enabled;
+          sendDoc();
+          break;
+        case "setRenderCap":
+          renderCap = typeof msg.value === "number" && msg.value >= 0 ? msg.value : 2560;
           sendDoc();
           break;
         case "setBackend": {
