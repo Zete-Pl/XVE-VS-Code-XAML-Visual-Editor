@@ -403,6 +403,8 @@ let tool: Tool = "select";
 let snapOn = true;
 let gridStep = 8;
 let showGrid = false;
+let showRulers = true;
+let guidesVisible = true;
 interface Guide {
   axis: "x" | "y";
   pos: number;
@@ -471,30 +473,52 @@ function onDragMove(e: MouseEvent) {
   drag.moved = true;
   const target = document.querySelector<HTMLElement>(`#surface [data-xve-id="${drag.id}"]`);
   if (!target) return;
-  // podgląd na żywo bez zapisu — transform / wymiary tymczasowe
-  if (drag.mode === "move") {
-    target.style.transform = `translate(${dx}px, ${dy}px)`;
-  } else {
+  const node = nodeById.get(drag.id);
+  // podgląd na żywo Z UWZGLĘDNIENIEM snapu (nie tylko po upuszczeniu)
+  if (drag.mode === "move" && node) {
+    const { tx, ty } = liveMoveOffset(node, dx, dy);
+    target.style.transform = `translate(${tx}px, ${ty}px)`;
+  } else if (drag.mode === "resize") {
     applyResizePreview(target, drag.dir!, dx, dy, drag.w0, drag.h0);
   }
   updateOverlay();
 }
 
+/** Przesunięcie w px po nałożeniu snapu do siatki i prowadnic (podgląd na żywo). */
+function liveMoveOffset(node: RenderNode, dx: number, dy: number): { tx: number; ty: number } {
+  const a = attrMapOf(node);
+  const parent = parentById.get(node.id);
+  if (parent && localTag(parent.tag) === "Canvas") {
+    const baseL = numOf(a["Canvas.Left"]) ?? 0;
+    const baseT = numOf(a["Canvas.Top"]) ?? 0;
+    return {
+      tx: snapToGuide("x", snap(baseL + dx)) - baseL,
+      ty: snapToGuide("y", snap(baseT + dy)) - baseT,
+    };
+  }
+  const [ml, mt, mr, mb] = thicknessOf(a.Margin);
+  const ha = a.HorizontalAlignment || "Stretch";
+  const va = a.VerticalAlignment || "Stretch";
+  const tx = ha === "Right" ? -(snap(mr - dx) - mr) : snapToGuide("x", snap(ml + dx)) - ml;
+  const ty = va === "Bottom" ? -(snap(mb - dy) - mb) : snapToGuide("y", snap(mt + dy)) - mt;
+  return { tx, ty };
+}
+
 function applyResizePreview(el: HTMLElement, dir: string, dx: number, dy: number, w0: number, h0: number) {
-  // baza = rozmiar startowy gestu (nie bieżący rect — inaczej zmiana by się kumulowała)
+  // baza = rozmiar startowy gestu; snap stosujemy też na żywo
   let w = w0;
   let h = h0;
   let tx = 0;
   let ty = 0;
-  if (dir.includes("e")) w += dx;
-  if (dir.includes("s")) h += dy;
+  if (dir.includes("e")) w = snap(w0 + dx);
+  if (dir.includes("s")) h = snap(h0 + dy);
   if (dir.includes("w")) {
-    w -= dx;
-    tx = dx;
+    w = snap(w0 - dx);
+    tx = w0 - w;
   }
   if (dir.includes("n")) {
-    h -= dy;
-    ty = dy;
+    h = snap(h0 - dy);
+    ty = h0 - h;
   }
   el.style.width = Math.max(0, w) + "px";
   el.style.height = Math.max(0, h) + "px";
@@ -645,6 +669,32 @@ function buildPreviewTools() {
   host.appendChild(showField);
 
   host.appendChild(sep());
+
+  // przełączniki: linijki / prowadnice
+  const rulersField = document.createElement("label");
+  rulersField.className = "tool-field";
+  const rulersCb = document.createElement("input");
+  rulersCb.type = "checkbox";
+  rulersCb.checked = showRulers;
+  rulersCb.onchange = () => {
+    showRulers = rulersCb.checked;
+    applyRulersVisibility();
+  };
+  rulersField.append(rulersCb, document.createTextNode(T("Tool.Rulers")));
+  host.appendChild(rulersField);
+
+  const guidesField = document.createElement("label");
+  guidesField.className = "tool-field";
+  const guidesCb = document.createElement("input");
+  guidesCb.type = "checkbox";
+  guidesCb.checked = guidesVisible;
+  guidesCb.onchange = () => {
+    guidesVisible = guidesCb.checked;
+    renderGuides();
+  };
+  guidesField.append(guidesCb, document.createTextNode(T("Tool.Guides")));
+  host.appendChild(guidesField);
+
   const clr = document.createElement("button");
   clr.className = "tool-btn";
   clr.textContent = T("Tool.ClearGuides");
@@ -654,6 +704,12 @@ function buildPreviewTools() {
     renderGuides();
   };
   host.appendChild(clr);
+}
+
+function applyRulersVisibility() {
+  const frame = document.getElementById("preview-frame")!;
+  frame.classList.toggle("no-rulers", !showRulers);
+  if (showRulers) drawRulers();
 }
 function sep(): HTMLElement {
   const s = document.createElement("div");
@@ -696,6 +752,7 @@ function cssVar(name: string, fallback: string): string {
   return v || fallback;
 }
 function drawRulers() {
+  if (!showRulers) return;
   const top = document.getElementById("ruler-top") as HTMLCanvasElement;
   const left = document.getElementById("ruler-left") as HTMLCanvasElement;
   if (!top || !left) return;
@@ -719,16 +776,15 @@ function drawRulerAxis(
   const major = 50;
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
-  ctx.globalAlpha = 0.7;
-  ctx.font = "9px var(--vscode-font-family)";
+  ctx.globalAlpha = 0.6;
+  ctx.font = "9px sans-serif";
   ctx.lineWidth = 1;
   const startC = Math.floor((0 - origin) / minor) * minor;
   const endC = Math.ceil((length - origin) / minor) * minor;
   ctx.beginPath();
   for (let c = startC; c <= endC; c += minor) {
     const p = Math.round(origin + c) + 0.5;
-    const isMajor = c % major === 0;
-    const len = isMajor ? thickness : 5;
+    const len = c % major === 0 ? thickness : 4;
     if (axis === "x") {
       ctx.moveTo(p, thickness - len);
       ctx.lineTo(p, thickness);
@@ -738,8 +794,10 @@ function drawRulerAxis(
     }
   }
   ctx.stroke();
-  ctx.globalAlpha = 1;
-  for (let c = startC; c <= endC; c += major) {
+  ctx.globalAlpha = 0.9;
+  // etykiety wyłącznie na wielokrotnościach `major`, wyrównane do 0
+  const labelStart = Math.ceil(startC / major) * major;
+  for (let c = labelStart; c <= endC; c += major) {
     const p = Math.round(origin + c);
     if (axis === "x") {
       ctx.fillText(String(c), p + 2, 8);
@@ -754,10 +812,14 @@ function drawRulerAxis(
 }
 
 // ---------- siatka i prowadnice ----------
+// Warstwy są przyklejone DOKŁADNIE do powierzchni (#surface), nie do całego scrolla —
+// inaczej powiększałyby zawartość i scrollWidth rosłoby w nieskończoność.
 function sizeLayer(layer: HTMLElement) {
-  const sc = scrollEl();
-  layer.style.width = sc.scrollWidth + "px";
-  layer.style.height = sc.scrollHeight + "px";
+  const s = surfaceEl();
+  layer.style.left = s.offsetLeft + "px";
+  layer.style.top = s.offsetTop + "px";
+  layer.style.width = s.offsetWidth + "px";
+  layer.style.height = s.offsetHeight + "px";
 }
 function renderGrid() {
   const layer = document.getElementById("grid-layer")!;
@@ -766,22 +828,21 @@ function renderGrid() {
     layer.style.backgroundImage = "none";
     return;
   }
-  const s = surfaceEl();
   const line = cssVar("--vscode-panel-border", "#8884");
   layer.style.backgroundImage = `linear-gradient(to right, ${line} 1px, transparent 1px), linear-gradient(to bottom, ${line} 1px, transparent 1px)`;
   layer.style.backgroundSize = `${gridStep}px ${gridStep}px`;
-  layer.style.backgroundPosition = `${s.offsetLeft}px ${s.offsetTop}px`;
+  layer.style.backgroundPosition = `0 0`;
 }
 function renderGuides() {
   const layer = document.getElementById("guide-layer")!;
   sizeLayer(layer);
+  layer.style.display = guidesVisible ? "block" : "none";
   layer.innerHTML = "";
-  const s = surfaceEl();
   guides.forEach((g, i) => {
     const d = document.createElement("div");
     d.className = "guide " + (g.axis === "x" ? "gx" : "gy");
-    if (g.axis === "x") d.style.left = s.offsetLeft + g.pos + "px";
-    else d.style.top = s.offsetTop + g.pos + "px";
+    if (g.axis === "x") d.style.left = g.pos + "px";
+    else d.style.top = g.pos + "px";
     d.dataset.gi = String(i);
     d.title = `${g.axis === "x" ? "X" : "Y"} = ${g.pos}`;
     layer.appendChild(d);

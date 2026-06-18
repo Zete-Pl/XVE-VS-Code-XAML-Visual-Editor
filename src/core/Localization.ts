@@ -33,6 +33,8 @@ const MAP: Record<string, string[]> = {
   "Tool.Snap": ["Snap", "Przyciąganie", "Ajustar", "Einrasten", "Aligner", "スナップ", "对齐"],
   "Tool.Grid": ["Grid", "Siatka", "Cuadrícula", "Raster", "Grille", "グリッド", "网格"],
   "Tool.ShowGrid": ["Show grid", "Pokaż siatkę", "Mostrar cuadrícula", "Raster anzeigen", "Afficher la grille", "グリッドを表示", "显示网格"],
+  "Tool.Rulers": ["Rulers", "Linijki", "Reglas", "Lineale", "Règles", "ルーラー", "标尺"],
+  "Tool.Guides": ["Guides", "Prowadnice", "Guías", "Hilfslinien", "Repères", "ガイド", "参考线"],
   "Tool.ClearGuides": ["Clear guides", "Wyczyść prowadnice", "Borrar guías", "Hilfslinien löschen", "Effacer les repères", "ガイドを消去", "清除参考线"],
   "Tool.ClearGuidesTip": ["Remove all guides (click a ruler to add one)", "Usuń wszystkie prowadnice (kliknij linijkę, by dodać)", "Quitar todas las guías (haz clic en una regla para añadir)", "Alle Hilfslinien entfernen (Lineal anklicken zum Hinzufügen)", "Supprimer tous les repères (cliquez sur une règle pour en ajouter)", "すべてのガイドを削除（ルーラーをクリックで追加）", "移除所有参考线（点击标尺添加）"],
   "Status.ParsedElements": ["{0} elements", "{0} elementów", "{0} elementos", "{0} Elemente", "{0} éléments", "{0} 個の要素", "{0} 个元素"],

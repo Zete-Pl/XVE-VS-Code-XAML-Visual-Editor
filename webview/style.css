@@ -144,6 +144,15 @@ body {
 #ruler-left {
   border-right: 1px solid var(--vscode-panel-border);
 }
+#preview-frame.no-rulers {
+  grid-template-columns: 0 1fr;
+  grid-template-rows: 0 1fr;
+}
+#preview-frame.no-rulers #ruler-top,
+#preview-frame.no-rulers #ruler-left,
+#preview-frame.no-rulers #ruler-corner {
+  display: none;
+}
 
 /* ---------- powierzchnia podglądu ---------- */
 #surface-scroll {
