@@ -50,6 +50,24 @@ test("structuralDiff: dopasowanie po x:Name mimo zmiany atrybutu", () => {
   assert.equal(ch[0].kind, "attrs");
 });
 
+test("structuralDiff: poprawna atrybucja przy wstawieniu przed elementami tego samego typu", () => {
+  const base = new XamlDocument(
+    `<S>\n  <CheckBox Content="one" IsChecked="True"/>\n  <CheckBox Content="two" IsChecked="False"/>\n</S>`
+  );
+  const cur = new XamlDocument(
+    `<S>\n  <CheckBox Content="new" IsChecked="False"/>\n  <CheckBox Content="one" IsChecked="True"/>\n  <CheckBox Content="two" IsChecked="True"/>\n</S>`
+  );
+  const ch = structuralDiff(base, cur);
+  const added = ch.filter((c) => c.kind === "added");
+  const attrs = ch.filter((c) => c.kind === "attrs");
+  // dokładnie: 1 dodany (new) + zmiana IsChecked na "two" — NIE na "one"
+  assert.equal(added.length, 1);
+  assert.equal(attrs.length, 1);
+  if (attrs[0].kind === "attrs") {
+    assert.deepEqual(attrs[0].attrs, [{ name: "IsChecked", baseline: "False", current: "True" }]);
+  }
+});
+
 test("structuralDiff: brak zmian → pusta lista", () => {
   const src = `<Grid>\n  <Button Content="A"/>\n</Grid>`;
   assert.deepEqual(structuralDiff(new XamlDocument(src), new XamlDocument(src)), []);

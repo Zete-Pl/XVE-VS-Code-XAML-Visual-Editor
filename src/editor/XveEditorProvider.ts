@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { XamlDocument } from "../core/XamlDocument.ts";
 import { structuralDiff } from "../core/StructuralDiff.ts";
+import type { Change } from "../core/StructuralDiff.ts";
 import { changedLinesInB } from "../core/LineDiff.ts";
 import { dictionaryForIndex, currentLanguageIndex, LANGUAGES } from "../core/Localization.ts";
 
@@ -74,7 +75,9 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
       post({
         type: "doc",
         tree: doc.toTree(),
-        changed: this.changedAttributes(baselineText, text),
+        // mapa podświetleń wyprowadzona z TEGO SAMEGO dopasowania co Changes — spójna
+        // i poprawnie przypisana (także dla wielu elementów tego samego typu)
+        changed: changedFromDiff(changes),
         changes,
         dirty: document.isDirty,
         fileName: document.fileName,
@@ -154,6 +157,9 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           showInlineDiff = !!msg.enabled;
           this.applyInlineDiff(document, baselineText, showInlineDiff);
           break;
+        case "revealNode":
+          this.revealNode(document, msg.id);
+          break;
         case "revertAll":
           if (document.getText() !== baselineText) {
             const edit = new vscode.WorkspaceEdit();
@@ -169,31 +175,21 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     });
   }
 
-  /** Mapa id → { atrybut: wartośćBaseline | null }. null = atrybut dodany (brak w baseline). */
-  private changedAttributes(
-    baselineText: string,
-    currentText: string
-  ): Record<number, Record<string, string | null>> {
-    if (baselineText === currentText) return {};
-    const base = new XamlDocument(baselineText);
-    const cur = new XamlDocument(currentText);
-    const out: Record<number, Record<string, string | null>> = {};
-    const walk = (id: number) => {
-      const node = cur.getNode(id);
-      if (!node || node.kind !== "element") return;
-      const baseNode = base.getNode(id);
-      for (const a of node.attributes) {
-        const baseAttr = baseNode?.attributes.find((b) => b.name === a.name);
-        if (!baseNode || baseAttr === undefined) {
-          (out[id] ??= {})[a.name] = null;
-        } else if (baseAttr.value !== a.value) {
-          (out[id] ??= {})[a.name] = baseAttr.value;
-        }
-      }
-      for (const c of node.children) walk(c.id);
-    };
-    if (cur.root) walk(cur.root.id);
-    return out;
+  /** Przewija widoczne edytory tekstu do pierwszego wiersza danego elementu. */
+  private revealNode(document: vscode.TextDocument, id: number): void {
+    const editors = vscode.window.visibleTextEditors.filter(
+      (e) => e.document.uri.toString() === document.uri.toString()
+    );
+    if (editors.length === 0) return;
+    const node = new XamlDocument(document.getText()).getNode(id);
+    if (!node) return;
+    const off = node.openTagSpan?.start ?? node.span.start;
+    const pos = document.positionAt(off);
+    const range = new vscode.Range(pos, pos);
+    for (const e of editors) {
+      e.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+      e.selection = new vscode.Selection(pos, pos);
+    }
   }
 
   /** Aplikuje chirurgiczną mutację na świeżym XamlDocument i zapisuje jako WorkspaceEdit. */
@@ -276,4 +272,17 @@ function getNonce(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   for (let i = 0; i < 32; i++) text += chars.charAt(Math.floor(Math.random() * chars.length));
   return text;
+}
+
+/** Mapa podświetleń id → { atrybut: wartośćBaseline|null } wyprowadzona z diffu strukturalnego. */
+function changedFromDiff(changes: Change[]): Record<number, Record<string, string | null>> {
+  const out: Record<number, Record<string, string | null>> = {};
+  for (const c of changes) {
+    if (c.kind === "attrs") {
+      const m: Record<string, string | null> = {};
+      for (const a of c.attrs) m[a.name] = a.baseline;
+      out[c.id] = m;
+    }
+  }
+  return out;
 }

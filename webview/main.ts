@@ -380,6 +380,8 @@ function select(id: number, scrollPreview = false) {
     target?.scrollIntoView({ block: "nearest", inline: "nearest" });
     updateOverlay();
   }
+  // przewiń edytor tekstu (jeśli otwarty obok) do pierwszego wiersza elementu
+  vscode.postMessage({ type: "revealNode", id });
 }
 
 function countElements(n: RenderNode): number {

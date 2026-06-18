@@ -21,12 +21,21 @@ export type Change =
 function elementChildren(n: XamlNode): XamlNode[] {
   return n.children.filter((c) => c.kind === "element");
 }
-function nameOf(n: XamlNode): string | undefined {
-  return n.attributes.find((a) => a.name === "x:Name" || a.name === "Name")?.value;
+// Atrybuty identyfikujące element (priorytet od najpewniejszego). x:Name/Name są
+// najtrwalsze; Content/Header/Title/Text rozróżniają rodzeństwo tego samego typu bez
+// nazwy (np. dwa CheckBoxy „Option one/two") — dzięki temu zmiana trafia na właściwy
+// element nawet po wstawieniu/usunięciu sąsiada.
+const IDENT_ATTRS = ["x:Name", "Name", "Content", "Header", "Title", "Text"];
+function identOf(n: XamlNode): string | undefined {
+  for (const name of IDENT_ATTRS) {
+    const v = n.attributes.find((a) => a.name === name)?.value;
+    if (v) return v;
+  }
+  return undefined;
 }
 function keyOf(n: XamlNode): string {
-  const nm = nameOf(n);
-  return (n.tag ?? "") + (nm ? "#" + nm : "");
+  const id = identOf(n);
+  return (n.tag ?? "") + (id ? "#" + id : "");
 }
 
 /** Najdłuższy wspólny podciąg kluczy → pary dopasowanych indeksów (w kolejności). */
