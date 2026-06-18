@@ -86,6 +86,7 @@
   "scripts": {
     "compile": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
+    "build:host": "dotnet build wpf-host -c Release",
     "vscode:prepublish": "node esbuild.mjs --production",
     "test:unit": "node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/*.test.ts"
   },

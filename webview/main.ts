@@ -28,6 +28,11 @@ let viewMode: "design" | "changes" = "design";
 let showInlineDiff = true; // podświetlanie zmian w edytorze tekstu (przełącznik w Changes)
 let isWindows = false;
 let backend = "auto"; // auto | web | wpf-host
+let previewMode: "web" | "wpf" = "web";
+let hostPng: string | null = null;
+let hostW = 0;
+let hostH = 0;
+const hostRects = new Map<number, { x: number; y: number; w: number; h: number }>();
 const nodeById = new Map<number, RenderNode>();
 const parentById = new Map<number, RenderNode | null>();
 let clipboardXml: string | null = null;
@@ -100,9 +105,37 @@ function renderStructureNode(n: RenderNode): HTMLElement {
 // ---------- podgląd ----------
 function renderPreview() {
   const surface = document.getElementById("surface")!;
-  renderTreeToDom(tree, surface);
+  const png = previewMode === "wpf" && hostPng;
+  surface.classList.toggle("png", !!png);
+  if (png) {
+    surface.innerHTML = "";
+    const img = document.createElement("img");
+    img.src = "data:image/png;base64," + hostPng;
+    img.style.display = "block";
+    img.style.width = hostW + "px";
+    img.style.height = hostH + "px";
+    surface.appendChild(img);
+  } else {
+    renderTreeToDom(tree, surface);
+  }
+  document.getElementById("sel-overlay")!.classList.toggle("no-handles", !!png);
   updateOverlay();
   drawDecorations();
+}
+
+function hitTestRects(x: number, y: number): number | null {
+  let best: number | null = null;
+  let bestArea = Infinity;
+  for (const [id, r] of hostRects) {
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+      const area = r.w * r.h;
+      if (area < bestArea) {
+        bestArea = area;
+        best = id;
+      }
+    }
+  }
+  return best;
 }
 
 function updateOverlay() {
@@ -110,6 +143,21 @@ function updateOverlay() {
   const scroll = document.getElementById("surface-scroll")!;
   if (selectedId === null) {
     overlay.style.display = "none";
+    return;
+  }
+  // tryb PNG (host WPF): pozycja z mapy hit-test (we współrzędnych projektu)
+  if (previewMode === "wpf" && hostPng) {
+    const r = hostRects.get(selectedId);
+    if (!r) {
+      overlay.style.display = "none";
+      return;
+    }
+    const s = surfaceEl();
+    overlay.style.display = "block";
+    overlay.style.left = s.offsetLeft + r.x + "px";
+    overlay.style.top = s.offsetTop + r.y + "px";
+    overlay.style.width = r.w + "px";
+    overlay.style.height = r.h + "px";
     return;
   }
   const target = document.querySelector<HTMLElement>(`#surface [data-xve-id="${selectedId}"]`);
@@ -1172,6 +1220,19 @@ document.getElementById("surface")!.addEventListener("mousedown", (e) => {
     startPan(e);
     return;
   }
+  // tryb PNG: selekcja przez hit-test (bez drag — edycja przez panel właściwości)
+  if (previewMode === "wpf" && hostPng) {
+    const d = clientToDesign(e.clientX, e.clientY);
+    const id = hitTestRects(d.x, d.y);
+    if (id !== null) {
+      e.preventDefault();
+      if (id !== selectedId) {
+        select(id);
+        setStatus();
+      }
+    }
+    return;
+  }
   const t = (e.target as HTMLElement).closest<HTMLElement>("[data-xve-id]");
   if (!t) return;
   e.preventDefault();
@@ -1274,9 +1335,28 @@ window.addEventListener("message", (e) => {
     case "clipboard":
       clipboardXml = msg.xml ?? null;
       break;
+    case "render":
+      hostPng = msg.png ?? null;
+      hostW = msg.width ?? 0;
+      hostH = msg.height ?? 0;
+      hostRects.clear();
+      for (const r of msg.rects ?? []) {
+        const id = parseInt(String(r.uid).slice(1), 10);
+        if (!isNaN(id)) hostRects.set(id, { x: r.x, y: r.y, w: r.w, h: r.h });
+      }
+      if (previewMode === "wpf") renderPreview();
+      break;
+    case "renderError":
+      hostPng = null; // spadek na renderer web
+      renderPreview();
+      setStatus();
+      break;
     case "doc": {
       tree = msg.tree;
       changed = msg.changed ?? {};
+      const prevMode = previewMode;
+      previewMode = msg.previewMode === "wpf" ? "wpf" : "web";
+      if (previewMode === "web" && prevMode !== "web") hostPng = null;
       changesData = msg.changes ?? [];
       updateChangesBadge();
       if (viewMode === "changes") renderChanges();

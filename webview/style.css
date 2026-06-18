@@ -428,6 +428,12 @@ body {
   background: color-mix(in srgb, var(--vscode-focusBorder, #0a84ff) 12%, transparent);
   z-index: 10;
 }
+#surface.png {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+#sel-overlay.no-handles .sel-handle {
+  display: none;
+}
 .sel-handle {
   position: absolute;
   width: 8px;

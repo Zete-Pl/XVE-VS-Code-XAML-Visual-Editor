@@ -6,9 +6,19 @@ edycja zmienia wyłącznie to, co trzeba, a reszta pliku pozostaje bajt-w-bajt n
 
 > Osobne repozytorium. Aplikacja WPF służy jako referencja zachowań, nie współdzielimy kodu.
 
-## Status — Etap 4 (diff / Changes)
+## Status — Etap 5 (host WPF, Windows) + Ustawienia
 
 Zrobione:
+- **Panel Ustawień** (⚙ w pasku) z wyborem **silnika podglądu**: Auto / Web (cross‑platform) /
+  WPF host (Windows). Na nie‑Windows tylko web.
+- **Host WPF** (`wpf-host/`, .NET 10): proces `xve-wpf-host.exe` renderuje XAML **prawdziwym
+  silnikiem WPF** do PNG i zwraca mapę hit‑test (prostokąty wg `x:Uid`). Protokół JSON‑lines.
+- **Tryb PNG w podglądzie**: gdy backend = WPF host, podgląd to wierny obraz; klik mapuje się
+  na element przez hit‑test (selekcja + właściwości + Changes działają; edycja przez panel
+  re‑renderuje). Łagodny **fallback na web** przy błędzie/timeout hosta.
+- Budowa hosta: `npm run build:host` (wymaga .NET 10 SDK, Windows).
+
+Wcześniej — Etap 4 (diff / Changes):
 - **`LineDiff`** (LCS) i **`StructuralDiff`** (dopasowanie drzew keyed‑LCS po tag + x:Name)
   w TS — porty z aplikacji WPF, czyste i otestowane.
 - **Widok Changes** (przełącznik Design/Changes w pasku, licznik): lista zmian względem

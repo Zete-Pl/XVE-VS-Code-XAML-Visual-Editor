@@ -3,6 +3,7 @@ import { XamlDocument } from "../core/XamlDocument.ts";
 import { structuralDiff } from "../core/StructuralDiff.ts";
 import type { Change } from "../core/StructuralDiff.ts";
 import { changedLinesInB } from "../core/LineDiff.ts";
+import { WpfHost } from "../host/WpfHost.ts";
 import { dictionaryForIndex, currentLanguageIndex, LANGUAGES } from "../core/Localization.ts";
 
 /**
@@ -33,6 +34,45 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
       overviewRulerLane: vscode.OverviewRulerLane.Left,
     });
     context.subscriptions.push(this.changedLineDecoration);
+  }
+
+  /** Proces hosta WPF (Windows) — tworzony leniwie i współdzielony. */
+  private host?: WpfHost;
+  private getHost(): WpfHost {
+    if (!this.host) {
+      const exe = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "wpf-host",
+        "bin",
+        "Release",
+        "net10.0-windows",
+        "xve-wpf-host.exe"
+      ).fsPath;
+      this.host = new WpfHost(exe);
+      this.context.subscriptions.push({ dispose: () => this.host?.dispose() });
+    }
+    return this.host;
+  }
+  private useWpfHost(): boolean {
+    return (
+      process.platform === "win32" &&
+      vscode.workspace.getConfiguration("xve").get<string>("previewBackend") === "wpf-host"
+    );
+  }
+
+  /** Renderuje bieżący dokument przez host WPF i wysyła PNG + mapę hit-test do webview. */
+  private async renderViaHost(document: vscode.TextDocument, post: (m: unknown) => void): Promise<void> {
+    try {
+      const hostXaml = new XamlDocument(document.getText()).toHostXaml();
+      const r = await this.getHost().render(hostXaml, 1200, 900);
+      if (r.ok && r.png) {
+        post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
+      } else {
+        post({ type: "renderError", error: r.error ?? "render failed" });
+      }
+    } catch (e) {
+      post({ type: "renderError", error: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   /** Podświetla w widocznych edytorach tekstu linie zmienione względem `baselineText`. */
@@ -81,8 +121,10 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         changes,
         dirty: document.isDirty,
         fileName: document.fileName,
+        previewMode: this.useWpfHost() ? "wpf" : "web",
       });
       this.applyInlineDiff(document, baselineText, showInlineDiff);
+      if (this.useWpfHost()) void this.renderViaHost(document, post);
     };
 
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {

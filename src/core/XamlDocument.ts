@@ -196,6 +196,25 @@ export class XamlDocument {
     this.edits.push({ start, end, text });
   }
 
+  /**
+   * Produkuje XAML dla hosta WPF: wstrzykuje `x:Uid="u<id>"` w każdy element (mapowanie
+   * prostokątów hit-test → id) i usuwa `x:Class` z korzenia. UWAGA: mutuje TEN dokument —
+   * wywołuj na instancji jednorazowej (np. `new XamlDocument(text).toHostXaml()`).
+   */
+  toHostXaml(): string {
+    const inject = (n: XamlNode) => {
+      if (n.kind === "element") {
+        if (!n.attributes.some((a) => a.name === "x:Uid")) this.setAttribute(n.id, "x:Uid", "u" + n.id);
+        for (const c of n.children) inject(c);
+      }
+    };
+    if (this.root) {
+      inject(this.root);
+      this.removeAttribute(this.root.id, "x:Class");
+    }
+    return this.getText();
+  }
+
   /** Drzewo do webview: tylko elementy (text/comment pomijamy w widoku struktury). */
   toTree(): TreeNodeDto | null {
     if (!this.root) return null;
