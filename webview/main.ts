@@ -41,6 +41,7 @@ let dragSession = true; // trwała sesja hosta (szybciej) vs pełny re-render co
 let dragCoalesce = true; // koalescencja: tylko 1 klatka „w locie" (odrzuca zaległe)
 let dragRealSize = true; // render w rzeczywistym rozmiarze viewportu vs sztywne 1200×900
 let renderCap = 2560; // limit rozdzielczości renderu hosta (px); 0 = bez limitu
+let zoom = 1; // skala podglądu (1 = 100%)
 const nodeById = new Map<number, RenderNode>();
 const parentById = new Map<number, RenderNode | null>();
 let clipboardXml: string | null = null;
@@ -126,6 +127,7 @@ function renderPreview() {
   } else {
     renderTreeToDom(tree, surface);
   }
+  applyZoomTransform();
   updateOverlay();
   drawDecorations();
 }
@@ -152,19 +154,19 @@ function updateOverlay() {
     overlay.style.display = "none";
     return;
   }
-  // tryb PNG (host WPF): pozycja z mapy hit-test (we współrzędnych projektu)
+  // tryb PNG (host WPF): pozycja z mapy hit-test (współrzędne projektu × zoom)
   if (previewMode === "wpf" && hostPng) {
     const r = hostRects.get(selectedId);
     if (!r) {
       overlay.style.display = "none";
       return;
     }
-    const s = surfaceEl();
+    const ze = zoomEl();
     overlay.style.display = "block";
-    overlay.style.left = s.offsetLeft + r.x + "px";
-    overlay.style.top = s.offsetTop + r.y + "px";
-    overlay.style.width = r.w + "px";
-    overlay.style.height = r.h + "px";
+    overlay.style.left = ze.offsetLeft + r.x * zoom + "px";
+    overlay.style.top = ze.offsetTop + r.y * zoom + "px";
+    overlay.style.width = r.w * zoom + "px";
+    overlay.style.height = r.h * zoom + "px";
     return;
   }
   const target = document.querySelector<HTMLElement>(`#surface [data-xve-id="${selectedId}"]`);
@@ -916,8 +918,8 @@ function startResize(e: MouseEvent, dir: string) {
     const el = document.querySelector<HTMLElement>(`#surface [data-xve-id="${selectedId}"]`);
     const r = el?.getBoundingClientRect();
     dragBaseRect = null;
-    w0 = r?.width ?? 0;
-    h0 = r?.height ?? 0;
+    w0 = (r?.width ?? 0) / zoom;
+    h0 = (r?.height ?? 0) / zoom;
   }
   drag = { mode: "resize", dir, id: selectedId, startX: e.clientX, startY: e.clientY, moved: false, w0, h0 };
   dragLatestAttrs = null;
@@ -926,13 +928,13 @@ function startResize(e: MouseEvent, dir: string) {
 
 /** Ustawia nakładkę zaznaczenia we współrzędnych projektu (tryb PNG). */
 function setOverlayDesignRect(x: number, y: number, w: number, h: number) {
-  const s = surfaceEl();
+  const ze = zoomEl();
   const o = document.getElementById("sel-overlay")!;
   o.style.display = "block";
-  o.style.left = s.offsetLeft + x + "px";
-  o.style.top = s.offsetTop + y + "px";
-  o.style.width = Math.max(0, w) + "px";
-  o.style.height = Math.max(0, h) + "px";
+  o.style.left = ze.offsetLeft + x * zoom + "px";
+  o.style.top = ze.offsetTop + y * zoom + "px";
+  o.style.width = Math.max(0, w * zoom) + "px";
+  o.style.height = Math.max(0, h * zoom) + "px";
 }
 
 // Pompa re-renderu na żywo (tylko tryb PNG + strategia frames/ms). Wysyła do hosta
@@ -987,9 +989,9 @@ function stopDragPump() {
 
 function onDragMove(e: MouseEvent) {
   if (!drag) return;
-  const dx = e.clientX - drag.startX;
-  const dy = e.clientY - drag.startY;
-  if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
+  const dx = (e.clientX - drag.startX) / zoom;
+  const dy = (e.clientY - drag.startY) / zoom;
+  if (!drag.moved && (Math.abs(dx) + Math.abs(dy)) * zoom < 3) return;
   drag.moved = true;
   const node = nodeById.get(drag.id);
   if (!node) return;
@@ -1092,8 +1094,8 @@ function onDragUp(e: MouseEvent) {
   if (!d.moved) return;
   const node = nodeById.get(d.id);
   if (!node) return;
-  const dx = snap(e.clientX - d.startX);
-  const dy = snap(e.clientY - d.startY);
+  const dx = snap((e.clientX - d.startX) / zoom);
+  const dy = snap((e.clientY - d.startY) / zoom);
   const attrs =
     d.mode === "move" ? computeMove(node, dx, dy) : computeResize(node, d.dir!, dx, dy, d.w0, d.h0);
   if (attrs && Object.keys(attrs).length) {
@@ -1184,6 +1186,30 @@ function buildPreviewTools() {
   group.appendChild(mkTool("select", T("Tool.Select"), T("Tool.SelectTip")));
   group.appendChild(mkTool("pan", T("Tool.Pan"), T("Tool.PanTip")));
   host.appendChild(group);
+
+  host.appendChild(sep());
+
+  // zoom: −  100%  +  (oraz Ctrl+scroll)
+  const zoomGroup = document.createElement("div");
+  zoomGroup.className = "tool-group";
+  const zOut = document.createElement("button");
+  zOut.className = "tool-btn";
+  zOut.textContent = "−";
+  zOut.title = T("Zoom.Out");
+  zOut.onclick = () => setZoom(zoom / 1.25);
+  const zLabel = document.createElement("button");
+  zLabel.id = "zoom-label";
+  zLabel.className = "tool-btn";
+  zLabel.title = T("Zoom.Reset");
+  zLabel.textContent = Math.round(zoom * 100) + "%";
+  zLabel.onclick = () => setZoom(1);
+  const zIn = document.createElement("button");
+  zIn.className = "tool-btn";
+  zIn.textContent = "+";
+  zIn.title = T("Zoom.In");
+  zIn.onclick = () => setZoom(zoom * 1.25);
+  zoomGroup.append(zOut, zLabel, zIn);
+  host.appendChild(zoomGroup);
 
   host.appendChild(sep());
 
@@ -1287,19 +1313,62 @@ function scrollEl(): HTMLElement {
  * fallbacku dla korzeni bez jawnego Width/Height zamiast sztywnego 1200×900. */
 function reportViewport() {
   const sc = scrollEl();
-  const w = Math.max(1, Math.round(sc.clientWidth - 48));
-  const h = Math.max(1, Math.round(sc.clientHeight - 48));
+  const w = Math.max(1, Math.round((sc.clientWidth - 48) / zoom));
+  const h = Math.max(1, Math.round((sc.clientHeight - 48) / zoom));
   vscode.postMessage({ type: "viewport", width: w, height: h });
 }
-/** Współrzędna projektowa z pozycji myszy (0,0 = lewy-górny róg powierzchni). */
+function zoomEl(): HTMLElement {
+  return document.getElementById("zoom")!;
+}
+/** Współrzędna projektowa z pozycji myszy (0,0 = lewy-górny róg powierzchni; uwzględnia zoom). */
 function clientToDesign(clientX: number, clientY: number): { x: number; y: number } {
-  const sc = scrollEl();
-  const r = sc.getBoundingClientRect();
+  const z = zoomEl().getBoundingClientRect();
+  return { x: (clientX - z.left) / zoom, y: (clientY - z.top) / zoom };
+}
+
+/** Ustawia transform skali i rozmiar sizera (paski przewijania odzwierciedlają zoom). */
+function applyZoomTransform() {
+  const ze = zoomEl();
+  ze.style.transform = `scale(${zoom})`;
   const s = surfaceEl();
-  return {
-    x: clientX - r.left + sc.scrollLeft - s.offsetLeft,
-    y: clientY - r.top + sc.scrollTop - s.offsetTop,
-  };
+  const sizer = document.getElementById("zoom-sizer")!;
+  sizer.style.width = Math.max(1, s.offsetWidth * zoom) + "px";
+  sizer.style.height = Math.max(1, s.offsetHeight * zoom) + "px";
+}
+
+const ZOOM_MIN = 0.1;
+const ZOOM_MAX = 8;
+/** Ustawia zoom; opcjonalnie zakotwicza punkt projektu pod kursorem (anchor w client px). */
+function setZoom(z: number, anchorX?: number, anchorY?: number) {
+  z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+  const sc = scrollEl();
+  let dx = 0;
+  let dy = 0;
+  if (anchorX !== undefined && anchorY !== undefined) {
+    const before = clientToDesign(anchorX, anchorY); // design pod kursorem przed
+    const old = zoom;
+    zoom = z;
+    applyZoomTransform();
+    // przewiń tak, by ten sam punkt projektu został pod kursorem
+    const ze = zoomEl().getBoundingClientRect();
+    const nowClientX = ze.left + before.x * zoom;
+    const nowClientY = ze.top + before.y * zoom;
+    dx = nowClientX - anchorX;
+    dy = nowClientY - anchorY;
+    sc.scrollLeft += dx;
+    sc.scrollTop += dy;
+    void old;
+  } else {
+    zoom = z;
+    applyZoomTransform();
+  }
+  updateOverlay();
+  drawDecorations();
+  updateZoomLabel();
+}
+function updateZoomLabel() {
+  const el = document.getElementById("zoom-label");
+  if (el) el.textContent = Math.round(zoom * 100) + "%";
 }
 
 function cssVar(name: string, fallback: string): string {
@@ -1312,14 +1381,22 @@ const RULER_MAJOR = 50;
 /** Synchronizuje podziałkę (tło) ze scrollem i przerysowuje etykiety. */
 function updateRulers() {
   if (!showRulers) return;
-  const sc = scrollEl();
-  const s = surfaceEl();
-  const originX = s.offsetLeft - sc.scrollLeft; // px do design-0 względem lewej krawędzi paska
-  const originY = s.offsetTop - sc.scrollTop;
+  const topEl = document.getElementById("ruler-top")!;
+  const leftEl = document.getElementById("ruler-left")!;
+  const ze = zoomEl().getBoundingClientRect();
+  // origin = ekranowa pozycja design-0 względem lewej/górnej krawędzi paska (po zoomie/scroll)
+  const originX = ze.left - topEl.getBoundingClientRect().left;
+  const originY = ze.top - leftEl.getBoundingClientRect().top;
   const topTicks = document.getElementById("ruler-top-ticks");
   const leftTicks = document.getElementById("ruler-left-ticks");
-  if (topTicks) topTicks.style.backgroundPositionX = `${originX}px, ${originX}px`;
-  if (leftTicks) leftTicks.style.backgroundPositionY = `${originY}px, ${originY}px`;
+  if (topTicks) {
+    topTicks.style.backgroundPositionX = `${originX}px, ${originX}px`;
+    topTicks.style.backgroundSize = `${10 * zoom}px 5px, ${50 * zoom}px 10px`;
+  }
+  if (leftTicks) {
+    leftTicks.style.backgroundPositionY = `${originY}px, ${originY}px`;
+    leftTicks.style.backgroundSize = `5px ${10 * zoom}px, 10px ${50 * zoom}px`;
+  }
   buildAxisLabels(document.getElementById("ruler-top-labels"), "x", originX);
   buildAxisLabels(document.getElementById("ruler-left-labels"), "y", originY);
   renderGuideMarkers(originX, originY);
@@ -1336,8 +1413,8 @@ function renderGuideMarkers(originX: number, originY: number) {
     const m = document.createElement("div");
     m.className = "ruler-guide " + (g.axis === "x" ? "gx" : "gy") + (guideDrag === i ? " dragging" : "");
     m.textContent = String(g.pos);
-    if (g.axis === "x") m.style.left = originX + g.pos + "px";
-    else m.style.top = originY + g.pos + "px";
+    if (g.axis === "x") m.style.left = originX + g.pos * zoom + "px";
+    else m.style.top = originY + g.pos * zoom + "px";
     m.dataset.gi = String(i);
     host.appendChild(m);
   });
@@ -1347,10 +1424,11 @@ function buildAxisLabels(host: HTMLElement | null, axis: "x" | "y", origin: numb
   const length = axis === "x" ? host.clientWidth : host.clientHeight;
   host.innerHTML = "";
   if (length <= 0) return;
-  const startC = Math.ceil((2 - origin) / RULER_MAJOR) * RULER_MAJOR;
-  const endC = Math.floor((length - 2 - origin) / RULER_MAJOR) * RULER_MAJOR;
+  // etykiety co RULER_MAJOR jednostek PROJEKTU; pozycja ekranowa = origin + c*zoom
+  const startC = Math.ceil((2 - origin) / zoom / RULER_MAJOR) * RULER_MAJOR;
+  const endC = Math.floor((length - 2 - origin) / zoom / RULER_MAJOR) * RULER_MAJOR;
   for (let c = startC; c <= endC; c += RULER_MAJOR) {
-    const p = origin + c;
+    const p = origin + c * zoom;
     const span = document.createElement("span");
     span.className = "ruler-label";
     span.textContent = String(c);
@@ -1543,6 +1621,17 @@ document.getElementById("surface-scroll")!.addEventListener("scroll", () => {
   updateOverlay();
   updateRulers();
 });
+// Ctrl + kółko = zoom z zakotwiczeniem na kursorze
+document.getElementById("surface-scroll")!.addEventListener(
+  "wheel",
+  (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    setZoom(zoom * factor, e.clientX, e.clientY);
+  },
+  { passive: false }
+);
 
 // Stabilne odświeżanie przy zmianie rozmiaru viewportu (resize okna VS Code,
 // przełączanie paneli, toggle linijek) — debounce przez requestAnimationFrame.

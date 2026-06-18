@@ -356,9 +356,12 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         <div id="preview-tools"></div>
         <div id="preview-viewport" class="rulers-on">
           <div id="surface-scroll">
-            <div id="grid-layer"></div>
-            <div id="surface"></div>
-            <div id="guide-layer"></div>
+            <div id="zoom-sizer"></div>
+            <div id="zoom">
+              <div id="grid-layer"></div>
+              <div id="surface"></div>
+              <div id="guide-layer"></div>
+            </div>
             <div id="sel-overlay"></div>
           </div>
           <div id="ruler-top"><div id="ruler-top-ticks"></div><div id="ruler-top-labels"></div><div id="ruler-top-guides"></div></div>

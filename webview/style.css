@@ -264,6 +264,21 @@ body {
   background: var(--vscode-charts-orange, #e0863a);
   color: #fff;
 }
+/* warstwa zoomu — skaluje siatkę/powierzchnię/prowadnice; sizer napędza paski przewijania */
+#zoom {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+#zoom-sizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
 #grid-layer {
   position: absolute;
   left: 0;
