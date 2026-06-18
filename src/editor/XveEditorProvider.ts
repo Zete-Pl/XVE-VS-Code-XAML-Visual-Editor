@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { XamlDocument } from "../core/XamlDocument.ts";
+import { structuralDiff } from "../core/StructuralDiff.ts";
 import { dictionaryForIndex, currentLanguageIndex, LANGUAGES } from "../core/Localization.ts";
 
 /**
@@ -37,11 +38,14 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     let baselineText = document.getText();
 
     const sendDoc = () => {
-      const doc = new XamlDocument(document.getText());
+      const text = document.getText();
+      const doc = new XamlDocument(text);
+      const changes = text === baselineText ? [] : structuralDiff(new XamlDocument(baselineText), doc);
       post({
         type: "doc",
         tree: doc.toTree(),
-        changed: this.changedAttributes(baselineText, document.getText()),
+        changed: this.changedAttributes(baselineText, text),
+        changes,
         dirty: document.isDirty,
         fileName: document.fileName,
       });
@@ -93,6 +97,34 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           if (src) post({ type: "clipboard", xml: src });
           break;
         }
+        case "revertAttrs":
+          await this.applyEdit(document, (doc) => {
+            let any = false;
+            for (const s of msg.sets ?? []) if (doc.setAttribute(msg.id, s.name, s.value)) any = true;
+            for (const n of msg.removes ?? []) if (doc.removeAttribute(msg.id, n)) any = true;
+            return any;
+          });
+          break;
+        case "revertRemoved":
+          await this.applyEdit(document, (doc) => {
+            const p = doc.getNode(msg.parentId);
+            const before = p
+              ? (p.children.filter((c) => c.kind === "element")[msg.index]?.id ?? null)
+              : null;
+            return doc.insertChild(msg.parentId, msg.xml, before);
+          });
+          break;
+        case "revertAll":
+          if (document.getText() !== baselineText) {
+            const edit = new vscode.WorkspaceEdit();
+            const full = new vscode.Range(
+              document.positionAt(0),
+              document.positionAt(document.getText().length)
+            );
+            edit.replace(document.uri, full, baselineText);
+            await vscode.workspace.applyEdit(edit);
+          }
+          break;
       }
     });
   }
@@ -187,6 +219,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           <div id="ruler-left"><div id="ruler-left-ticks"></div><div id="ruler-left-labels"></div><div id="ruler-left-guides"></div></div>
           <div id="ruler-corner"></div>
         </div>
+        <div id="changes-view"></div>
       </main>
       <aside id="props-pane"><div class="pane-title" data-l10n="View.Properties"></div><div id="props"></div></aside>
     </div>

@@ -550,6 +550,57 @@ body {
   border-top: 1px solid var(--vscode-panel-border);
 }
 
+/* ---------- widok Changes ---------- */
+#changes-view {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 10px;
+}
+#preview-pane.mode-changes #preview-tools,
+#preview-pane.mode-changes #preview-viewport {
+  display: none;
+}
+#preview-pane.mode-changes #changes-view {
+  display: block;
+}
+.changes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.change-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-left: 2px solid transparent;
+}
+.change-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.change-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ch-attrs {
+  border-left-color: var(--vscode-editorWarning-foreground, #cca700);
+}
+.ch-added {
+  border-left-color: var(--vscode-gitDecoration-addedResourceForeground, #3a3);
+}
+.ch-removed {
+  border-left-color: var(--vscode-gitDecoration-deletedResourceForeground, #c33);
+}
+.ch-sign {
+  font-weight: bold;
+}
+
 /* sekcja Prowadnice w panelu właściwości */
 .guides-section {
   margin-top: 10px;

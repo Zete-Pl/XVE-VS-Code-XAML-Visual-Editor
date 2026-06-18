@@ -6,9 +6,18 @@ edycja zmienia wyłącznie to, co trzeba, a reszta pliku pozostaje bajt-w-bajt n
 
 > Osobne repozytorium. Aplikacja WPF służy jako referencja zachowań, nie współdzielimy kodu.
 
-## Status — Etap 3 (edycja wizualna)
+## Status — Etap 4 (diff / Changes)
 
 Zrobione:
+- **`LineDiff`** (LCS) i **`StructuralDiff`** (dopasowanie drzew keyed‑LCS po tag + x:Name)
+  w TS — porty z aplikacji WPF, czyste i otestowane.
+- **Widok Changes** (przełącznik Design/Changes w pasku, licznik): lista zmian względem
+  **zapisanego pliku** — zmiany atrybutów, dodane i usunięte elementy — z **revert per‑hunk**
+  oraz **Revert all**. Klik w pozycję zaznacza element w podglądzie.
+- Revert chirurgiczny przez te same operacje co edycja (set/remove/insert/delete),
+  Revert all = przywrócenie tekstu baseline.
+
+Wcześniej — Etap 3 (edycja wizualna):
 - **Edycja wizualna w podglądzie**: przeciąganie elementu (move → `Margin` lub `Canvas.Left/Top`
   wg layoutu rodzica), 8 uchwytów **resize** (z aktualizacją `Width/Height` i `Margin`),
   podgląd na żywo podczas gestu, commit jednym chirurgicznym zapisem (`setAttributes`).

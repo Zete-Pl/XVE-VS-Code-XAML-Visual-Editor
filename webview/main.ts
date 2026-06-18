@@ -1,5 +1,6 @@
 import "./style.css";
 import { renderTreeToDom, RenderNode } from "./renderer";
+import type { Change } from "../src/core/StructuralDiff";
 import {
   metaFor,
   knownProperties,
@@ -22,6 +23,8 @@ let l10n: Record<string, string> = {};
 let tree: RenderNode | null = null;
 let selectedId: number | null = null;
 let changed: Record<number, Record<string, string | null>> = {};
+let changesData: Change[] = [];
+let viewMode: "design" | "changes" = "design";
 const nodeById = new Map<number, RenderNode>();
 const parentById = new Map<number, RenderNode | null>();
 let clipboardXml: string | null = null;
@@ -421,6 +424,111 @@ function buildToolbar() {
   tb.appendChild(sel);
   tb.appendChild(add);
   tb.appendChild(del);
+
+  // przełącznik widoku: Design / Changes
+  tb.appendChild(sep());
+  const vg = document.createElement("div");
+  vg.className = "tool-group";
+  const mkView = (id: "design" | "changes", label: string) => {
+    const b = document.createElement("button");
+    b.className = "tool-btn" + (viewMode === id ? " active" : "");
+    b.textContent = label;
+    if (id === "changes") b.id = "view-changes-btn";
+    b.onclick = () => {
+      viewMode = id;
+      applyViewMode();
+    };
+    return b;
+  };
+  vg.appendChild(mkView("design", T("View.Design")));
+  vg.appendChild(mkView("changes", changesLabel()));
+  tb.appendChild(vg);
+}
+
+function changesLabel(): string {
+  return T("View.Changes") + (changesData.length ? ` (${changesData.length})` : "");
+}
+function updateChangesBadge() {
+  const b = document.getElementById("view-changes-btn");
+  if (b) b.textContent = changesLabel();
+}
+
+function applyViewMode() {
+  document.getElementById("preview-pane")!.classList.toggle("mode-changes", viewMode === "changes");
+  buildToolbar();
+  if (viewMode === "changes") renderChanges();
+  else drawDecorations();
+}
+
+// ---------- widok Changes (zmiany vs zapisany plik) ----------
+function renderChanges() {
+  const host = document.getElementById("changes-view")!;
+  host.innerHTML = "";
+  const header = document.createElement("div");
+  header.className = "changes-header";
+  const title = document.createElement("span");
+  title.className = "pane-subtitle";
+  title.textContent = `${T("Changes.Title")} (${changesData.length})`;
+  header.appendChild(title);
+  if (changesData.length) {
+    const all = document.createElement("button");
+    all.className = "tb-btn";
+    all.textContent = T("Changes.RevertAll");
+    all.onclick = () => vscode.postMessage({ type: "revertAll" });
+    header.appendChild(all);
+  }
+  host.appendChild(header);
+  if (!changesData.length) {
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = T("Changes.Empty");
+    host.appendChild(e);
+    return;
+  }
+  for (const c of changesData) host.appendChild(changeRow(c));
+}
+
+function changeRow(c: Change): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "change-row";
+  const label = document.createElement("span");
+  label.className = "change-label";
+  let revert: () => void;
+
+  if (c.kind === "attrs") {
+    row.classList.add("ch-attrs");
+    label.innerHTML = `<b>${c.tag}</b> · ${c.attrs.map((a) => a.name).join(", ")}`;
+    revert = () => {
+      const sets = c.attrs.filter((a) => a.baseline !== null).map((a) => ({ name: a.name, value: a.baseline as string }));
+      const removes = c.attrs.filter((a) => a.baseline === null).map((a) => a.name);
+      vscode.postMessage({ type: "revertAttrs", id: c.id, sets, removes });
+    };
+  } else if (c.kind === "added") {
+    row.classList.add("ch-added");
+    label.innerHTML = `<span class="ch-sign">+</span> <b>${c.tag}</b>`;
+    revert = () => vscode.postMessage({ type: "deleteElement", id: c.id });
+  } else {
+    row.classList.add("ch-removed");
+    label.innerHTML = `<span class="ch-sign">−</span> <b>${c.tag}</b>`;
+    revert = () => vscode.postMessage({ type: "revertRemoved", parentId: c.parentId, xml: c.xml, index: c.index });
+  }
+
+  if (c.kind !== "removed") {
+    label.style.cursor = "pointer";
+    label.onclick = () => {
+      select((c as { id: number }).id);
+      viewMode = "design";
+      applyViewMode();
+    };
+  }
+
+  const btn = document.createElement("button");
+  btn.className = "field-btn";
+  btn.title = T("Prop.Revert");
+  btn.textContent = "↶";
+  btn.onclick = revert;
+  row.append(label, btn);
+  return row;
 }
 
 /** Wyznacza rodzica-kontener dla nowego elementu na podstawie zaznaczenia. */
@@ -1078,6 +1186,9 @@ window.addEventListener("message", (e) => {
     case "doc": {
       tree = msg.tree;
       changed = msg.changed ?? {};
+      changesData = msg.changes ?? [];
+      updateChangesBadge();
+      if (viewMode === "changes") renderChanges();
       nodeById.clear();
       if (tree) indexTree(tree);
       if (selectedId !== null && !nodeById.has(selectedId)) selectedId = null;
