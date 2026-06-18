@@ -204,6 +204,19 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         case "revealNode":
           this.revealNode(document, msg.id);
           break;
+        case "previewDrag":
+          // podgląd przeciągania w trybie PNG: zastosuj atrybuty na KOPII (bez commitu
+          // do dokumentu) i przerysuj obraz hosta
+          if (this.useWpfHost()) {
+            const doc = new XamlDocument(document.getText());
+            doc.setAttributes(msg.id, msg.attrs);
+            const hostXaml = doc.toHostXaml();
+            const r = await this.getHost().render(hostXaml, 1200, 900);
+            if (r.ok && r.png) {
+              post({ type: "render", png: r.png, width: r.width, height: r.height, rects: r.rects ?? [] });
+            }
+          }
+          break;
         case "setBackend": {
           const value = ["auto", "web", "wpf-host"].includes(msg.value) ? msg.value : "auto";
           // na innych platformach niż Windows zawsze cross-platform (web)

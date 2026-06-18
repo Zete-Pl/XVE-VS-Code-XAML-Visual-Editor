@@ -33,6 +33,10 @@ let hostPng: string | null = null;
 let hostW = 0;
 let hostH = 0;
 const hostRects = new Map<number, { x: number; y: number; w: number; h: number }>();
+// strategia podglądu przeciągania w trybie PNG (host WPF)
+let dragPreviewMode: "overlay" | "frames" | "ms" = "overlay";
+let dragFrames = 2; // co ile klatek re-render
+let dragMs = 50; // co ile ms re-render
 const nodeById = new Map<number, RenderNode>();
 const parentById = new Map<number, RenderNode | null>();
 let clipboardXml: string | null = null;
@@ -118,7 +122,6 @@ function renderPreview() {
   } else {
     renderTreeToDom(tree, surface);
   }
-  document.getElementById("sel-overlay")!.classList.toggle("no-handles", !!png);
   updateOverlay();
   drawDecorations();
 }
@@ -567,6 +570,55 @@ function buildSettings() {
     sec.appendChild(note);
   }
   panel.appendChild(sec);
+
+  // strategia podglądu przeciągania (dotyczy trybu WPF host / PNG)
+  const drag = document.createElement("div");
+  drag.className = "settings-section";
+  const dlabel = document.createElement("div");
+  dlabel.className = "field-name";
+  dlabel.textContent = T("Settings.DragPreview");
+  drag.appendChild(dlabel);
+
+  const dragOpts: { value: typeof dragPreviewMode; label: string; num?: "frames" | "ms" }[] = [
+    { value: "overlay", label: T("Drag.Overlay") },
+    { value: "frames", label: T("Drag.Frames"), num: "frames" },
+    { value: "ms", label: T("Drag.Ms"), num: "ms" },
+  ];
+  for (const o of dragOpts) {
+    const row = document.createElement("label");
+    row.className = "settings-radio";
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "xve-drag";
+    radio.checked = dragPreviewMode === o.value;
+    radio.onchange = () => {
+      dragPreviewMode = o.value;
+      buildSettings();
+    };
+    row.append(radio, document.createTextNode(o.label));
+    if (o.num) {
+      const inp = document.createElement("input");
+      inp.type = "number";
+      inp.min = "1";
+      inp.className = "tool-num";
+      inp.value = String(o.num === "frames" ? dragFrames : dragMs);
+      inp.onchange = () => {
+        const v = parseInt(inp.value, 10);
+        if (v > 0) {
+          if (o.num === "frames") dragFrames = v;
+          else dragMs = v;
+        }
+      };
+      row.appendChild(inp);
+      row.appendChild(document.createTextNode(o.num === "frames" ? T("Drag.UnitFrames") : "ms"));
+    }
+    drag.appendChild(row);
+  }
+  const dnote = document.createElement("div");
+  dnote.className = "settings-note";
+  dnote.textContent = T("Drag.Note");
+  drag.appendChild(dnote);
+  panel.appendChild(drag);
 }
 
 function changesLabel(): string {
@@ -768,25 +820,82 @@ interface Drag {
   h0: number;
 }
 let drag: Drag | null = null;
+let dragBaseRect: { x: number; y: number; w: number; h: number } | null = null;
+let dragLatestAttrs: Record<string, string> | null = null;
+let dragRaf = 0;
+let dragFrameCount = 0;
+let dragLastSent = 0;
+
+function pngMode(): boolean {
+  return previewMode === "wpf" && !!hostPng;
+}
 
 function startMove(e: MouseEvent, id: number) {
   drag = { mode: "move", id, startX: e.clientX, startY: e.clientY, moved: false, w0: 0, h0: 0 };
+  dragBaseRect = pngMode() ? hostRects.get(id) ?? null : null;
+  dragLatestAttrs = null;
+  startDragPump();
 }
 function startResize(e: MouseEvent, dir: string) {
   if (selectedId === null) return;
   e.stopPropagation();
-  const el = document.querySelector<HTMLElement>(`#surface [data-xve-id="${selectedId}"]`);
-  const r = el?.getBoundingClientRect();
-  drag = {
-    mode: "resize",
-    dir,
-    id: selectedId,
-    startX: e.clientX,
-    startY: e.clientY,
-    moved: false,
-    w0: r?.width ?? 0,
-    h0: r?.height ?? 0,
+  let w0 = 0;
+  let h0 = 0;
+  if (pngMode()) {
+    const r = hostRects.get(selectedId);
+    dragBaseRect = r ? { ...r } : null;
+    w0 = r?.w ?? 0;
+    h0 = r?.h ?? 0;
+  } else {
+    const el = document.querySelector<HTMLElement>(`#surface [data-xve-id="${selectedId}"]`);
+    const r = el?.getBoundingClientRect();
+    dragBaseRect = null;
+    w0 = r?.width ?? 0;
+    h0 = r?.height ?? 0;
+  }
+  drag = { mode: "resize", dir, id: selectedId, startX: e.clientX, startY: e.clientY, moved: false, w0, h0 };
+  dragLatestAttrs = null;
+  startDragPump();
+}
+
+/** Ustawia nakładkę zaznaczenia we współrzędnych projektu (tryb PNG). */
+function setOverlayDesignRect(x: number, y: number, w: number, h: number) {
+  const s = surfaceEl();
+  const o = document.getElementById("sel-overlay")!;
+  o.style.display = "block";
+  o.style.left = s.offsetLeft + x + "px";
+  o.style.top = s.offsetTop + y + "px";
+  o.style.width = Math.max(0, w) + "px";
+  o.style.height = Math.max(0, h) + "px";
+}
+
+// Pompa re-renderu na żywo (tylko tryb PNG + strategia frames/ms). Wysyła do hosta
+// PODGLĄD (previewDrag) bez commitu do dokumentu — finalny zapis dopiero po puszczeniu.
+function startDragPump() {
+  if (!pngMode() || dragPreviewMode === "overlay") return;
+  dragFrameCount = 0;
+  dragLastSent = performance.now();
+  const tick = (t: number) => {
+    if (!drag) {
+      dragRaf = 0;
+      return;
+    }
+    dragFrameCount++;
+    const send =
+      dragPreviewMode === "frames"
+        ? dragFrameCount % Math.max(1, dragFrames) === 0
+        : t - dragLastSent >= Math.max(1, dragMs);
+    if (send && dragLatestAttrs) {
+      dragLastSent = t;
+      vscode.postMessage({ type: "previewDrag", id: drag.id, attrs: dragLatestAttrs });
+    }
+    dragRaf = requestAnimationFrame(tick);
   };
+  dragRaf = requestAnimationFrame(tick);
+}
+function stopDragPump() {
+  if (dragRaf) cancelAnimationFrame(dragRaf);
+  dragRaf = 0;
 }
 
 function onDragMove(e: MouseEvent) {
@@ -795,14 +904,47 @@ function onDragMove(e: MouseEvent) {
   const dy = e.clientY - drag.startY;
   if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
   drag.moved = true;
+  const node = nodeById.get(drag.id);
+  if (!node) return;
+
+  // tryb PNG: brak DOM elementu — animujemy tylko nakładkę; attrs trzymamy do commitu/pompy
+  if (pngMode()) {
+    const base = dragBaseRect ?? { x: 0, y: 0, w: drag.w0, h: drag.h0 };
+    if (drag.mode === "move") {
+      const { tx, ty } = liveMoveOffset(node, dx, dy);
+      setOverlayDesignRect(base.x + tx, base.y + ty, base.w, base.h);
+      dragLatestAttrs = computeMove(node, dx, dy);
+    } else {
+      const dir = drag.dir!;
+      let x = base.x;
+      let y = base.y;
+      let w = base.w;
+      let h = base.h;
+      if (dir.includes("e")) w = snap(base.w + dx);
+      if (dir.includes("s")) h = snap(base.h + dy);
+      if (dir.includes("w")) {
+        const nw = snap(base.w - dx);
+        x = base.x + (base.w - nw);
+        w = nw;
+      }
+      if (dir.includes("n")) {
+        const nh = snap(base.h - dy);
+        y = base.y + (base.h - nh);
+        h = nh;
+      }
+      setOverlayDesignRect(x, y, w, h);
+      dragLatestAttrs = computeResize(node, dir, dx, dy, drag.w0, drag.h0);
+    }
+    return;
+  }
+
+  // tryb web (DOM): podgląd przez transform realnego elementu
   const target = document.querySelector<HTMLElement>(`#surface [data-xve-id="${drag.id}"]`);
   if (!target) return;
-  const node = nodeById.get(drag.id);
-  // podgląd na żywo Z UWZGLĘDNIENIEM snapu (nie tylko po upuszczeniu)
-  if (drag.mode === "move" && node) {
+  if (drag.mode === "move") {
     const { tx, ty } = liveMoveOffset(node, dx, dy);
     target.style.transform = `translate(${tx}px, ${ty}px)`;
-  } else if (drag.mode === "resize") {
+  } else {
     applyResizePreview(target, drag.dir!, dx, dy, drag.w0, drag.h0);
   }
   updateOverlay();
@@ -853,8 +995,13 @@ function onDragUp(e: MouseEvent) {
   if (!drag) return;
   const d = drag;
   drag = null;
-  const target = document.querySelector<HTMLElement>(`#surface [data-xve-id="${d.id}"]`);
-  if (target) target.style.transform = "";
+  stopDragPump();
+  dragBaseRect = null;
+  dragLatestAttrs = null;
+  if (!pngMode()) {
+    const target = document.querySelector<HTMLElement>(`#surface [data-xve-id="${d.id}"]`);
+    if (target) target.style.transform = "";
+  }
   if (!d.moved) return;
   const node = nodeById.get(d.id);
   if (!node) return;
@@ -1220,17 +1367,17 @@ document.getElementById("surface")!.addEventListener("mousedown", (e) => {
     startPan(e);
     return;
   }
-  // tryb PNG: selekcja przez hit-test (bez drag — edycja przez panel właściwości)
+  // tryb PNG: selekcja przez hit-test + start przeciągania (podgląd wg strategii z ustawień)
   if (previewMode === "wpf" && hostPng) {
     const d = clientToDesign(e.clientX, e.clientY);
     const id = hitTestRects(d.x, d.y);
-    if (id !== null) {
-      e.preventDefault();
-      if (id !== selectedId) {
-        select(id);
-        setStatus();
-      }
+    if (id === null) return;
+    e.preventDefault();
+    if (id !== selectedId) {
+      select(id);
+      setStatus();
     }
+    if (tree && id !== tree.id) startMove(e, id);
     return;
   }
   const t = (e.target as HTMLElement).closest<HTMLElement>("[data-xve-id]");
