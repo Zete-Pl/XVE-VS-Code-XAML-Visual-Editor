@@ -94,6 +94,15 @@ export class XamlDocument {
     return true;
   }
 
+  /** Ustawia wiele atrybutów atomowo (jeden zapis) — używane przy move/resize. */
+  setAttributes(nodeId: number, attrs: Record<string, string>): boolean {
+    let any = false;
+    for (const [name, value] of Object.entries(attrs)) {
+      if (this.setAttribute(nodeId, name, value)) any = true;
+    }
+    return any;
+  }
+
   /** Usuwa atrybut wraz z poprzedzającym whitespace. */
   removeAttribute(nodeId: number, name: string): boolean {
     const node = this.byId.get(nodeId);
@@ -104,6 +113,81 @@ export class XamlDocument {
     this.replace(attr.fullSpan.start, attr.fullSpan.end, "");
     node.attributes.splice(idx, 1);
     return true;
+  }
+
+  // ---------- operacje strukturalne ----------
+
+  /** Zwraca surowy XAML elementu (wycinek oryginału). */
+  getElementSource(nodeId: number): string | null {
+    const n = this.byId.get(nodeId);
+    if (!n || n.kind !== "element") return null;
+    return this.original.slice(n.span.start, n.span.end);
+  }
+
+  /** Wcięcie (whitespace od początku linii) danego węzła. */
+  private indentOf(n: XamlNode): string {
+    let i = n.span.start;
+    while (i > 0 && (this.original[i - 1] === " " || this.original[i - 1] === "\t")) i--;
+    return this.original.slice(i, n.span.start);
+  }
+
+  /** Usuwa element wraz z jego wcięciem i poprzedzającym znakiem nowej linii. */
+  removeElement(nodeId: number): boolean {
+    const n = this.byId.get(nodeId);
+    if (!n || n.kind !== "element") return false;
+    let s = n.span.start;
+    while (s > 0 && (this.original[s - 1] === " " || this.original[s - 1] === "\t")) s--;
+    if (s > 0 && this.original[s - 1] === "\n") {
+      s--;
+      if (s > 0 && this.original[s - 1] === "\r") s--;
+    }
+    this.replace(s, n.span.end, "");
+    return true;
+  }
+
+  /**
+   * Wstawia surowy XAML jako dziecko `parentId`. Gdy podano `beforeId` — przed tym
+   * rodzeństwem, w przeciwnym razie na końcu (przed znacznikiem zamykającym).
+   */
+  insertChild(parentId: number, xml: string, beforeId: number | null = null): boolean {
+    const p = this.byId.get(parentId);
+    if (!p || p.kind !== "element" || p.selfClosing || !p.openTagSpan) return false;
+    const elementChildren = p.children.filter((c) => c.kind === "element");
+
+    if (beforeId != null) {
+      const b = this.byId.get(beforeId);
+      if (!b) return false;
+      const indent = this.indentOf(b);
+      const at = b.span.start - indent.length;
+      this.replace(at, at, indent + xml + "\n");
+      return true;
+    }
+
+    if (elementChildren.length) {
+      const last = elementChildren[elementChildren.length - 1];
+      const indent = this.indentOf(last);
+      this.replace(last.span.end, last.span.end, "\n" + indent + xml);
+    } else {
+      // brak elementów-dzieci: jeśli ciało jest puste/whitespace, znormalizuj je
+      const tag = p.tag ?? "";
+      const closeStart = p.span.end - (tag.length + 3); // pozycja "</tag>"
+      const inner = this.original.slice(p.openTagSpan.end, closeStart);
+      const childIndent = this.indentOf(p) + "\t";
+      if (inner.trim() === "" && closeStart >= p.openTagSpan.end) {
+        this.replace(p.openTagSpan.end, closeStart, "\n" + childIndent + xml + "\n" + this.indentOf(p));
+      } else {
+        this.replace(p.openTagSpan.end, p.openTagSpan.end, "\n" + childIndent + xml);
+      }
+    }
+    return true;
+  }
+
+  /** Przenosi element pod nowego rodzica (delete + insert). */
+  moveElement(nodeId: number, newParentId: number, beforeId: number | null = null): boolean {
+    const xml = this.getElementSource(nodeId);
+    if (xml == null) return false;
+    if (!this.removeElement(nodeId)) return false;
+    return this.insertChild(newParentId, xml, beforeId);
   }
 
   private replace(start: number, end: number, text: string) {

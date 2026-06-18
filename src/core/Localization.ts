@@ -22,6 +22,10 @@ const MAP: Record<string, string[]> = {
   "Prop.Add": ["Add property…", "Dodaj właściwość…", "Agregar propiedad…", "Eigenschaft hinzufügen…", "Ajouter une propriété…", "プロパティを追加…", "添加属性…"],
   "Prop.Remove": ["Remove property", "Usuń właściwość", "Quitar propiedad", "Eigenschaft entfernen", "Supprimer la propriété", "プロパティを削除", "删除属性"],
   "Prop.Revert": ["Revert to saved value", "Przywróć zapisaną wartość", "Revertir al valor guardado", "Auf gespeicherten Wert zurücksetzen", "Rétablir la valeur enregistrée", "保存値に戻す", "还原为已保存的值"],
+  "Tb.Add": ["Add", "Dodaj", "Agregar", "Hinzufügen", "Ajouter", "追加", "添加"],
+  "Tb.AddTip": ["Add element into the selected container", "Dodaj element do zaznaczonego kontenera", "Agregar elemento al contenedor seleccionado", "Element zum ausgewählten Container hinzufügen", "Ajouter un élément au conteneur sélectionné", "選択したコンテナーに要素を追加", "将元素添加到所选容器"],
+  "Tb.Delete": ["Delete", "Usuń", "Eliminar", "Löschen", "Supprimer", "削除", "删除"],
+  "Tb.DeleteTip": ["Delete the selected element (Del)", "Usuń zaznaczony element (Del)", "Eliminar el elemento seleccionado (Supr)", "Ausgewähltes Element löschen (Entf)", "Supprimer l'élément sélectionné (Suppr)", "選択した要素を削除 (Del)", "删除所选元素 (Del)"],
   "Status.ParsedElements": ["{0} elements", "{0} elementów", "{0} elementos", "{0} Elemente", "{0} éléments", "{0} 個の要素", "{0} 个元素"],
   "Status.PreviewSoon": [
     "Visual preview arrives in stage 1 — structure & source available now",

@@ -205,6 +205,52 @@ body {
   background: color-mix(in srgb, var(--vscode-focusBorder, #0a84ff) 12%, transparent);
   z-index: 10;
 }
+.sel-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--vscode-editor-background, #fff);
+  border: 1.5px solid var(--vscode-focusBorder, #0a84ff);
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+.h-nw { left: -5px; top: -5px; cursor: nwse-resize; }
+.h-n  { left: 50%; top: -5px; transform: translateX(-50%); cursor: ns-resize; }
+.h-ne { right: -5px; top: -5px; cursor: nesw-resize; }
+.h-e  { right: -5px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+.h-se { right: -5px; bottom: -5px; cursor: nwse-resize; }
+.h-s  { left: 50%; bottom: -5px; transform: translateX(-50%); cursor: ns-resize; }
+.h-sw { left: -5px; bottom: -5px; cursor: nesw-resize; }
+.h-w  { left: -5px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+
+/* pasek narzędzi */
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+#toolbar:empty {
+  display: none;
+}
+.tb-select {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent);
+  padding: 2px 4px;
+}
+.tb-btn {
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  color: var(--vscode-button-secondaryForeground, #fff);
+  border: none;
+  padding: 3px 10px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.tb-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
 
 #props {
   padding: 6px 8px;

@@ -74,9 +74,25 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         case "setAttribute":
           await this.applyEdit(document, (doc) => doc.setAttribute(msg.id, msg.name, msg.value));
           break;
+        case "setAttributes":
+          await this.applyEdit(document, (doc) => doc.setAttributes(msg.id, msg.attrs));
+          break;
         case "removeAttribute":
           await this.applyEdit(document, (doc) => doc.removeAttribute(msg.id, msg.name));
           break;
+        case "deleteElement":
+          await this.applyEdit(document, (doc) => doc.removeElement(msg.id));
+          break;
+        case "insertChild":
+          await this.applyEdit(document, (doc) =>
+            doc.insertChild(msg.parentId, msg.xml, msg.beforeId ?? null)
+          );
+          break;
+        case "requestCopy": {
+          const src = new XamlDocument(document.getText()).getElementSource(msg.id);
+          if (src) post({ type: "clipboard", xml: src });
+          break;
+        }
       }
     });
   }

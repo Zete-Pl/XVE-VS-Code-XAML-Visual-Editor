@@ -205,6 +205,83 @@ export function metaFor(tag: string, attrName: string): PropMeta {
   return kind === "enum" ? { name: attrName, kind, values: enumValuesFor(attrName) } : { name: attrName, kind };
 }
 
+/** Typy oferowane w pasku „dodaj element". */
+export const ADDABLE_TYPES = [
+  "Grid",
+  "StackPanel",
+  "Canvas",
+  "Border",
+  "TextBlock",
+  "Label",
+  "Button",
+  "TextBox",
+  "CheckBox",
+  "RadioButton",
+  "Slider",
+  "ProgressBar",
+  "Image",
+  "Ellipse",
+  "Rectangle",
+];
+
+const POS = `Margin="10,10,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"`;
+
+/** Domyślny snippet XAML dla nowo wstawianego elementu. */
+export function defaultSnippet(type: string): string {
+  switch (type) {
+    case "Button":
+      return `<Button Content="Button" Width="100" Height="32" ${POS} />`;
+    case "TextBlock":
+      return `<TextBlock Text="TextBlock" ${POS} />`;
+    case "Label":
+      return `<Label Content="Label" ${POS} />`;
+    case "TextBox":
+      return `<TextBox Text="" Width="160" Height="28" ${POS} />`;
+    case "CheckBox":
+      return `<CheckBox Content="CheckBox" IsChecked="False" ${POS} />`;
+    case "RadioButton":
+      return `<RadioButton Content="RadioButton" IsChecked="False" ${POS} />`;
+    case "Slider":
+      return `<Slider Width="180" Minimum="0" Maximum="100" Value="50" ${POS} />`;
+    case "ProgressBar":
+      return `<ProgressBar Width="180" Height="16" Minimum="0" Maximum="100" Value="50" ${POS} />`;
+    case "Image":
+      return `<Image Width="120" Height="120" Stretch="Uniform" ${POS} />`;
+    case "Ellipse":
+      return `<Ellipse Fill="LightGray" Stroke="Gray" StrokeThickness="1" Width="80" Height="80" ${POS} />`;
+    case "Rectangle":
+      return `<Rectangle Fill="LightGray" Stroke="Gray" StrokeThickness="1" Width="120" Height="80" ${POS} />`;
+    case "Border":
+      return `<Border BorderBrush="Gray" BorderThickness="1" CornerRadius="4" Width="160" Height="120" ${POS} />`;
+    case "Canvas":
+      return `<Canvas Width="200" Height="160" Background="#11000000" ${POS} />`;
+    case "StackPanel":
+      return `<StackPanel Width="160" ${POS} />`;
+    case "Grid":
+      return `<Grid Width="200" Height="160" ${POS} />`;
+    default:
+      return `<${type} Width="100" Height="60" ${POS} />`;
+  }
+}
+
+/** Czy typ może zawierać dzieci (kontener). */
+export function isContainer(tag: string): boolean {
+  const n = localName(tag);
+  return [
+    "Grid",
+    "StackPanel",
+    "Canvas",
+    "Border",
+    "DockPanel",
+    "WrapPanel",
+    "Viewbox",
+    "ScrollViewer",
+    "Window",
+    "UserControl",
+    "Page",
+  ].includes(n);
+}
+
 /** Domyślna wartość dla nowo dodawanej właściwości. */
 export function defaultValue(meta: PropMeta): string {
   switch (meta.kind) {

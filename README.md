@@ -6,9 +6,18 @@ edycja zmienia wyłącznie to, co trzeba, a reszta pliku pozostaje bajt-w-bajt n
 
 > Osobne repozytorium. Aplikacja WPF służy jako referencja zachowań, nie współdzielimy kodu.
 
-## Status — Etap 2 (typowany panel właściwości)
+## Status — Etap 3 (edycja wizualna)
 
 Zrobione:
+- **Edycja wizualna w podglądzie**: przeciąganie elementu (move → `Margin` lub `Canvas.Left/Top`
+  wg layoutu rodzica), 8 uchwytów **resize** (z aktualizacją `Width/Height` i `Margin`),
+  podgląd na żywo podczas gestu, commit jednym chirurgicznym zapisem (`setAttributes`).
+- **Operacje strukturalne** w `XamlDocument`: `removeElement`, `insertChild`, `moveElement`,
+  `getElementSource` (zachowanie wcięć/formatowania).
+- **Pasek narzędzi**: dodawanie elementu (lista typów + domyślne snippety) do zaznaczonego
+  kontenera, usuwanie. **Skróty**: Delete, Ctrl+C / Ctrl+V (kopiuj/wklej poddrzewo).
+
+Wcześniej:
 - Custom Text Editor dla `*.xaml` (webview: drzewo struktury, podgląd, panel właściwości).
 - Rdzeń `XamlDocument` + pozycyjny tokenizer `XamlParser` z chirurgiczną edycją atrybutów.
 - **Web renderer** subsetu XAML→DOM (`renderer.ts`): Window/Grid/Canvas/StackPanel/Border,

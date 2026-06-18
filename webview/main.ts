@@ -1,6 +1,14 @@
 import "./style.css";
 import { renderTreeToDom, RenderNode } from "./renderer";
-import { metaFor, knownProperties, defaultValue, PropMeta } from "../src/core/TypeRegistry";
+import {
+  metaFor,
+  knownProperties,
+  defaultValue,
+  PropMeta,
+  ADDABLE_TYPES,
+  defaultSnippet,
+  isContainer,
+} from "../src/core/TypeRegistry";
 
 // Komunikacja z extension host
 declare function acquireVsCodeApi(): {
@@ -15,6 +23,8 @@ let tree: RenderNode | null = null;
 let selectedId: number | null = null;
 let changed: Record<number, Record<string, string | null>> = {};
 const nodeById = new Map<number, RenderNode>();
+const parentById = new Map<number, RenderNode | null>();
+let clipboardXml: string | null = null;
 
 function T(key: string): string {
   return l10n[key] ?? key;
@@ -26,9 +36,33 @@ function applyStaticL10n() {
   });
 }
 
-function indexTree(n: RenderNode) {
+function indexTree(n: RenderNode, parent: RenderNode | null = null) {
   nodeById.set(n.id, n);
-  n.children.forEach(indexTree);
+  parentById.set(n.id, parent);
+  n.children.forEach((c) => indexTree(c, n));
+}
+
+// ---------- pomocnicze: atrybuty / liczby / thickness ----------
+function attrMapOf(n: RenderNode): Record<string, string> {
+  const m: Record<string, string> = {};
+  for (const a of n.attributes) m[a.name] = a.value;
+  return m;
+}
+function numOf(v: string | undefined): number | undefined {
+  if (v === undefined) return undefined;
+  const n = parseFloat(v);
+  return isNaN(n) ? undefined : n;
+}
+function thicknessOf(v: string | undefined): [number, number, number, number] {
+  if (!v) return [0, 0, 0, 0];
+  const p = v.split(",").map((s) => parseFloat(s.trim()) || 0);
+  if (p.length === 1) return [p[0], p[0], p[0], p[0]];
+  if (p.length === 2) return [p[0], p[1], p[0], p[1]];
+  return [p[0] ?? 0, p[1] ?? 0, p[2] ?? 0, p[3] ?? 0];
+}
+function localTag(tag: string): string {
+  const i = tag.indexOf(":");
+  return i >= 0 ? tag.slice(i + 1) : tag;
 }
 
 // ---------- panel struktury ----------
@@ -132,10 +166,12 @@ function makeEditor(meta: PropMeta, value: string, onChange: (v: string) => void
       const text = document.createElement("input");
       text.className = "field-input";
       text.value = value;
+      // live: tylko aktualizuj podgląd hexa (bez commitu, żeby nie zamykać próbnika)
       swatch.oninput = () => {
         text.value = swatch.value;
-        onChange(swatch.value);
       };
+      // commit dopiero po zamknięciu próbnika
+      swatch.onchange = () => onChange(swatch.value);
       text.onchange = () => {
         const h = toHexColor(text.value);
         if (h) swatch.value = h;
@@ -279,18 +315,269 @@ function setStatus() {
     (sel ? ` · ${sel}` : "");
 }
 
-// klik w podglądzie → zaznaczenie
+// ---------- pasek narzędzi: dodaj / usuń element ----------
+function buildToolbar() {
+  const tb = document.getElementById("toolbar")!;
+  tb.innerHTML = "";
+  const sel = document.createElement("select");
+  sel.id = "tb-type";
+  sel.className = "tb-select";
+  for (const tname of ADDABLE_TYPES) {
+    const o = document.createElement("option");
+    o.value = o.textContent = tname;
+    sel.appendChild(o);
+  }
+  const add = document.createElement("button");
+  add.className = "tb-btn";
+  add.textContent = "+ " + T("Tb.Add");
+  add.title = T("Tb.AddTip");
+  add.onclick = () => addElement(sel.value);
+
+  const del = document.createElement("button");
+  del.className = "tb-btn";
+  del.textContent = "🗑 " + T("Tb.Delete");
+  del.title = T("Tb.DeleteTip");
+  del.onclick = () => deleteSelected();
+
+  tb.appendChild(sel);
+  tb.appendChild(add);
+  tb.appendChild(del);
+}
+
+/** Wyznacza rodzica-kontener dla nowego elementu na podstawie zaznaczenia. */
+function targetContainer(): { parentId: number; beforeId: number | null } | null {
+  if (!tree) return null;
+  if (selectedId === null) return { parentId: tree.id, beforeId: null };
+  const node = nodeById.get(selectedId);
+  if (node && isContainer(node.tag)) return { parentId: node.id, beforeId: null };
+  const parent = parentById.get(selectedId);
+  if (parent) return { parentId: parent.id, beforeId: null };
+  return { parentId: tree.id, beforeId: null };
+}
+
+function addElement(type: string) {
+  const tgt = targetContainer();
+  if (!tgt) return;
+  vscode.postMessage({
+    type: "insertChild",
+    parentId: tgt.parentId,
+    beforeId: tgt.beforeId,
+    xml: defaultSnippet(type),
+  });
+}
+
+function deleteSelected() {
+  if (selectedId === null || !tree || selectedId === tree.id) return;
+  vscode.postMessage({ type: "deleteElement", id: selectedId });
+  selectedId = null;
+}
+
+function pasteClipboard() {
+  if (!clipboardXml) return;
+  const tgt = targetContainer();
+  if (!tgt) return;
+  vscode.postMessage({
+    type: "insertChild",
+    parentId: tgt.parentId,
+    beforeId: tgt.beforeId,
+    xml: clipboardXml,
+  });
+}
+
+// ---------- uchwyty zaznaczenia (resize) ----------
+const HANDLE_DIRS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+function buildHandles() {
+  const overlay = document.getElementById("sel-overlay")!;
+  for (const dir of HANDLE_DIRS) {
+    const h = document.createElement("div");
+    h.className = "sel-handle h-" + dir;
+    h.dataset.handle = dir;
+    overlay.appendChild(h);
+  }
+}
+
+// ---------- gesty: przesuwanie i skalowanie ----------
+const SNAP = 1; // krok zaokrąglenia (px)
+function snap(v: number): number {
+  return Math.round(v / SNAP) * SNAP;
+}
+
+interface Drag {
+  mode: "move" | "resize";
+  dir?: string;
+  id: number;
+  startX: number;
+  startY: number;
+  moved: boolean;
+}
+let drag: Drag | null = null;
+
+function startMove(e: MouseEvent, id: number) {
+  drag = { mode: "move", id, startX: e.clientX, startY: e.clientY, moved: false };
+}
+function startResize(e: MouseEvent, dir: string) {
+  if (selectedId === null) return;
+  e.stopPropagation();
+  drag = { mode: "resize", dir, id: selectedId, startX: e.clientX, startY: e.clientY, moved: false };
+}
+
+function onDragMove(e: MouseEvent) {
+  if (!drag) return;
+  const dx = e.clientX - drag.startX;
+  const dy = e.clientY - drag.startY;
+  if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
+  drag.moved = true;
+  const target = document.querySelector<HTMLElement>(`#surface [data-xve-id="${drag.id}"]`);
+  if (!target) return;
+  // podgląd na żywo bez zapisu — transform / wymiary tymczasowe
+  if (drag.mode === "move") {
+    target.style.transform = `translate(${dx}px, ${dy}px)`;
+  } else {
+    applyResizePreview(target, drag.dir!, dx, dy);
+  }
+  updateOverlay();
+}
+
+function applyResizePreview(el: HTMLElement, dir: string, dx: number, dy: number) {
+  const r = el.getBoundingClientRect();
+  let w = r.width;
+  let h = r.height;
+  let tx = 0;
+  let ty = 0;
+  if (dir.includes("e")) w += dx;
+  if (dir.includes("s")) h += dy;
+  if (dir.includes("w")) {
+    w -= dx;
+    tx = dx;
+  }
+  if (dir.includes("n")) {
+    h -= dy;
+    ty = dy;
+  }
+  el.style.width = Math.max(0, w) + "px";
+  el.style.height = Math.max(0, h) + "px";
+  el.style.transform = `translate(${tx}px, ${ty}px)`;
+}
+
+function onDragUp(e: MouseEvent) {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  const target = document.querySelector<HTMLElement>(`#surface [data-xve-id="${d.id}"]`);
+  if (target) target.style.transform = "";
+  if (!d.moved) return;
+  const node = nodeById.get(d.id);
+  if (!node) return;
+  const dx = snap(e.clientX - d.startX);
+  const dy = snap(e.clientY - d.startY);
+  const attrs = d.mode === "move" ? computeMove(node, dx, dy) : computeResize(node, d.dir!, dx, dy, target);
+  if (attrs && Object.keys(attrs).length) {
+    vscode.postMessage({ type: "setAttributes", id: d.id, attrs });
+  }
+}
+
+function computeMove(node: RenderNode, dx: number, dy: number): Record<string, string> {
+  const a = attrMapOf(node);
+  const parent = parentById.get(node.id);
+  if (parent && localTag(parent.tag) === "Canvas") {
+    const l = numOf(a["Canvas.Left"]) ?? 0;
+    const t = numOf(a["Canvas.Top"]) ?? 0;
+    return { "Canvas.Left": String(snap(l + dx)), "Canvas.Top": String(snap(t + dy)) };
+  }
+  const [ml, mt, mr, mb] = thicknessOf(a.Margin);
+  let nl = ml,
+    nt = mt,
+    nr = mr,
+    nb = mb;
+  if ((a.HorizontalAlignment || "Stretch") === "Right") nr = mr - dx;
+  else nl = ml + dx;
+  if ((a.VerticalAlignment || "Stretch") === "Bottom") nb = mb - dy;
+  else nt = mt + dy;
+  return { Margin: `${snap(nl)},${snap(nt)},${snap(nr)},${snap(nb)}` };
+}
+
+function computeResize(
+  node: RenderNode,
+  dir: string,
+  dx: number,
+  dy: number,
+  target: HTMLElement | null
+): Record<string, string> {
+  const a = attrMapOf(node);
+  const rect = target?.getBoundingClientRect();
+  let w = numOf(a.Width) ?? Math.round(rect?.width ?? 0);
+  let h = numOf(a.Height) ?? Math.round(rect?.height ?? 0);
+  let [ml, mt, mr, mb] = thicknessOf(a.Margin);
+  const ha = a.HorizontalAlignment || "Stretch";
+  const va = a.VerticalAlignment || "Stretch";
+  let marginTouched = false;
+
+  if (dir.includes("e")) w += dx;
+  if (dir.includes("s")) h += dy;
+  if (dir.includes("w")) {
+    w -= dx;
+    if (ha !== "Right") {
+      ml += dx;
+      marginTouched = true;
+    }
+  }
+  if (dir.includes("n")) {
+    h -= dy;
+    if (va !== "Bottom") {
+      mt += dy;
+      marginTouched = true;
+    }
+  }
+  const out: Record<string, string> = {
+    Width: String(Math.max(0, snap(w))),
+    Height: String(Math.max(0, snap(h))),
+  };
+  if (marginTouched) out.Margin = `${snap(ml)},${snap(mt)},${snap(mr)},${snap(mb)}`;
+  return out;
+}
+
+// klik w podglądzie → zaznaczenie + start przeciągania
 document.getElementById("surface")!.addEventListener("mousedown", (e) => {
   const t = (e.target as HTMLElement).closest<HTMLElement>("[data-xve-id]");
-  if (t) {
-    e.preventDefault();
-    select(Number(t.dataset.xveId));
+  if (!t) return;
+  e.preventDefault();
+  const id = Number(t.dataset.xveId);
+  if (id !== selectedId) {
+    select(id);
     setStatus();
+  }
+  if (tree && id !== tree.id) startMove(e, id);
+});
+
+// uchwyty resize (na nakładce)
+document.getElementById("sel-overlay")!.addEventListener("mousedown", (e) => {
+  const h = (e.target as HTMLElement).closest<HTMLElement>("[data-handle]");
+  if (h) {
+    e.preventDefault();
+    startResize(e, h.dataset.handle!);
+  }
+});
+
+window.addEventListener("mousemove", onDragMove);
+window.addEventListener("mouseup", onDragUp);
+
+// skróty: Delete / Ctrl+C / Ctrl+V
+window.addEventListener("keydown", (e) => {
+  const tag = (e.target as HTMLElement)?.tagName;
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+  if (e.key === "Delete" || e.key === "Backspace") {
+    deleteSelected();
+    e.preventDefault();
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+    if (selectedId !== null) vscode.postMessage({ type: "requestCopy", id: selectedId });
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+    pasteClipboard();
   }
 });
 
 window.addEventListener("resize", updateOverlay);
 document.getElementById("surface-scroll")!.addEventListener("scroll", updateOverlay);
+buildHandles();
 
 window.addEventListener("message", (e) => {
   const msg = e.data;
@@ -298,6 +585,10 @@ window.addEventListener("message", (e) => {
     case "init":
       l10n = msg.l10n ?? {};
       applyStaticL10n();
+      buildToolbar();
+      break;
+    case "clipboard":
+      clipboardXml = msg.xml ?? null;
       break;
     case "doc": {
       tree = msg.tree;
