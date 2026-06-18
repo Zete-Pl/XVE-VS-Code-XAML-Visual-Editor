@@ -23,6 +23,7 @@ const MAP: Record<string, string[]> = {
   "Changes.Title": ["Changes", "Zmiany", "Cambios", "Änderungen", "Modifications", "変更", "更改"],
   "Changes.Empty": ["No changes since last save", "Brak zmian od ostatniego zapisu", "Sin cambios desde el último guardado", "Keine Änderungen seit dem letzten Speichern", "Aucune modification depuis le dernier enregistrement", "前回の保存以降の変更はありません", "自上次保存以来没有更改"],
   "Changes.RevertAll": ["Revert all", "Cofnij wszystko", "Revertir todo", "Alle zurücksetzen", "Tout annuler", "すべて元に戻す", "全部还原"],
+  "Changes.InlineDiff": ["Show changes in code", "Pokaż zmiany w kodzie", "Mostrar cambios en el código", "Änderungen im Code anzeigen", "Afficher les modifications dans le code", "コードに変更を表示", "在代码中显示更改"],
   "View.NoSelection": ["No element selected", "Nie wybrano elementu", "Ningún elemento seleccionado", "Kein Element ausgewählt", "Aucun élément sélectionné", "要素が選択されていません", "未选择元素"],
   "Prop.Add": ["Add property…", "Dodaj właściwość…", "Agregar propiedad…", "Eigenschaft hinzufügen…", "Ajouter une propriété…", "プロパティを追加…", "添加属性…"],
   "Prop.Remove": ["Remove property", "Usuń właściwość", "Quitar propiedad", "Eigenschaft entfernen", "Supprimer la propriété", "プロパティを削除", "删除属性"],

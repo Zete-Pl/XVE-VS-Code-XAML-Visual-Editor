@@ -25,6 +25,7 @@ let selectedId: number | null = null;
 let changed: Record<number, Record<string, string | null>> = {};
 let changesData: Change[] = [];
 let viewMode: "design" | "changes" = "design";
+let showInlineDiff = true; // podświetlanie zmian w edytorze tekstu (przełącznik w Changes)
 const nodeById = new Map<number, RenderNode>();
 const parentById = new Map<number, RenderNode | null>();
 let clipboardXml: string | null = null;
@@ -478,6 +479,19 @@ function renderChanges() {
     header.appendChild(all);
   }
   host.appendChild(header);
+
+  // przełącznik: pokaż zmiany w kodzie (dekoracje linii w edytorze tekstu)
+  const diffField = document.createElement("label");
+  diffField.className = "tool-field changes-toggle";
+  const diffCb = document.createElement("input");
+  diffCb.type = "checkbox";
+  diffCb.checked = showInlineDiff;
+  diffCb.onchange = () => {
+    showInlineDiff = diffCb.checked;
+    vscode.postMessage({ type: "setInlineDiff", enabled: showInlineDiff });
+  };
+  diffField.append(diffCb, document.createTextNode(T("Changes.InlineDiff")));
+  host.appendChild(diffField);
   if (!changesData.length) {
     const e = document.createElement("div");
     e.className = "empty";

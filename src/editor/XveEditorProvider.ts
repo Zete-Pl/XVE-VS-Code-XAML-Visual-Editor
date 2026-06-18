@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { XamlDocument } from "../core/XamlDocument.ts";
 import { structuralDiff } from "../core/StructuralDiff.ts";
+import { changedLinesInB } from "../core/LineDiff.ts";
 import { dictionaryForIndex, currentLanguageIndex, LANGUAGES } from "../core/Localization.ts";
 
 /**
@@ -20,7 +21,35 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     );
   }
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  /** Dekoracja zmienionych linii w edytorze tekstu (diff inline względem zapisanego pliku). */
+  private readonly changedLineDecoration: vscode.TextEditorDecorationType;
+
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.changedLineDecoration = vscode.window.createTextEditorDecorationType({
+      isWholeLine: true,
+      backgroundColor: new vscode.ThemeColor("diffEditor.insertedLineBackground"),
+      overviewRulerColor: new vscode.ThemeColor("editorOverviewRuler.addedForeground"),
+      overviewRulerLane: vscode.OverviewRulerLane.Left,
+    });
+    context.subscriptions.push(this.changedLineDecoration);
+  }
+
+  /** Podświetla w widocznych edytorach tekstu linie zmienione względem `baselineText`. */
+  private applyInlineDiff(document: vscode.TextDocument, baselineText: string, show: boolean): void {
+    const editors = vscode.window.visibleTextEditors.filter(
+      (e) => e.document.uri.toString() === document.uri.toString()
+    );
+    if (editors.length === 0) return;
+    let ranges: vscode.Range[] = [];
+    if (show && document.getText() !== baselineText) {
+      const baseLines = baselineText.split(/\r?\n/);
+      const curLines = document.getText().split(/\r?\n/);
+      ranges = changedLinesInB(baseLines, curLines).map(
+        (i) => new vscode.Range(i, 0, i, (curLines[i] ?? "").length)
+      );
+    }
+    for (const e of editors) e.setDecorations(this.changedLineDecoration, ranges);
+  }
 
   async resolveCustomTextEditor(
     document: vscode.TextDocument,
@@ -36,6 +65,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
 
     // baseline = ostatnio zapisana zawartość (przy otwarciu == zawartość na dysku)
     let baselineText = document.getText();
+    let showInlineDiff = true; // przełącznik z widoku Changes (domyślnie włączony)
 
     const sendDoc = () => {
       const text = document.getText();
@@ -49,6 +79,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         dirty: document.isDirty,
         fileName: document.fileName,
       });
+      this.applyInlineDiff(document, baselineText, showInlineDiff);
     };
 
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
@@ -60,9 +91,14 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         sendDoc();
       }
     });
+    // gdy plik zostanie otwarty w zwykłym edytorze tekstu obok — nałóż dekoracje
+    const visSub = vscode.window.onDidChangeVisibleTextEditors(() => {
+      this.applyInlineDiff(document, baselineText, showInlineDiff);
+    });
     panel.onDidDispose(() => {
       changeSub.dispose();
       saveSub.dispose();
+      visSub.dispose();
     });
 
     panel.webview.onDidReceiveMessage(async (msg: any) => {
@@ -113,6 +149,10 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
               : null;
             return doc.insertChild(msg.parentId, msg.xml, before);
           });
+          break;
+        case "setInlineDiff":
+          showInlineDiff = !!msg.enabled;
+          this.applyInlineDiff(document, baselineText, showInlineDiff);
           break;
         case "revertAll":
           if (document.getText() !== baselineText) {
