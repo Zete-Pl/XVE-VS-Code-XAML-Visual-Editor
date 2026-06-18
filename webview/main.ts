@@ -409,16 +409,30 @@ interface Drag {
   startX: number;
   startY: number;
   moved: boolean;
+  /** rozmiar elementu w chwili rozpoczęcia gestu (baza dla podglądu skalowania) */
+  w0: number;
+  h0: number;
 }
 let drag: Drag | null = null;
 
 function startMove(e: MouseEvent, id: number) {
-  drag = { mode: "move", id, startX: e.clientX, startY: e.clientY, moved: false };
+  drag = { mode: "move", id, startX: e.clientX, startY: e.clientY, moved: false, w0: 0, h0: 0 };
 }
 function startResize(e: MouseEvent, dir: string) {
   if (selectedId === null) return;
   e.stopPropagation();
-  drag = { mode: "resize", dir, id: selectedId, startX: e.clientX, startY: e.clientY, moved: false };
+  const el = document.querySelector<HTMLElement>(`#surface [data-xve-id="${selectedId}"]`);
+  const r = el?.getBoundingClientRect();
+  drag = {
+    mode: "resize",
+    dir,
+    id: selectedId,
+    startX: e.clientX,
+    startY: e.clientY,
+    moved: false,
+    w0: r?.width ?? 0,
+    h0: r?.height ?? 0,
+  };
 }
 
 function onDragMove(e: MouseEvent) {
@@ -433,15 +447,15 @@ function onDragMove(e: MouseEvent) {
   if (drag.mode === "move") {
     target.style.transform = `translate(${dx}px, ${dy}px)`;
   } else {
-    applyResizePreview(target, drag.dir!, dx, dy);
+    applyResizePreview(target, drag.dir!, dx, dy, drag.w0, drag.h0);
   }
   updateOverlay();
 }
 
-function applyResizePreview(el: HTMLElement, dir: string, dx: number, dy: number) {
-  const r = el.getBoundingClientRect();
-  let w = r.width;
-  let h = r.height;
+function applyResizePreview(el: HTMLElement, dir: string, dx: number, dy: number, w0: number, h0: number) {
+  // baza = rozmiar startowy gestu (nie bieżący rect — inaczej zmiana by się kumulowała)
+  let w = w0;
+  let h = h0;
   let tx = 0;
   let ty = 0;
   if (dir.includes("e")) w += dx;
@@ -470,7 +484,8 @@ function onDragUp(e: MouseEvent) {
   if (!node) return;
   const dx = snap(e.clientX - d.startX);
   const dy = snap(e.clientY - d.startY);
-  const attrs = d.mode === "move" ? computeMove(node, dx, dy) : computeResize(node, d.dir!, dx, dy, target);
+  const attrs =
+    d.mode === "move" ? computeMove(node, dx, dy) : computeResize(node, d.dir!, dx, dy, d.w0, d.h0);
   if (attrs && Object.keys(attrs).length) {
     vscode.postMessage({ type: "setAttributes", id: d.id, attrs });
   }
@@ -501,12 +516,12 @@ function computeResize(
   dir: string,
   dx: number,
   dy: number,
-  target: HTMLElement | null
+  w0: number,
+  h0: number
 ): Record<string, string> {
   const a = attrMapOf(node);
-  const rect = target?.getBoundingClientRect();
-  let w = numOf(a.Width) ?? Math.round(rect?.width ?? 0);
-  let h = numOf(a.Height) ?? Math.round(rect?.height ?? 0);
+  let w = numOf(a.Width) ?? Math.round(w0);
+  let h = numOf(a.Height) ?? Math.round(h0);
   let [ml, mt, mr, mb] = thicknessOf(a.Margin);
   const ha = a.HorizontalAlignment || "Stretch";
   const va = a.VerticalAlignment || "Stretch";
