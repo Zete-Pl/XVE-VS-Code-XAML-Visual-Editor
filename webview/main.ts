@@ -1348,6 +1348,11 @@ function reportViewport() {
 /** Wysyła widoczny prostokąt (jednostki projektu) do hosta — tryb „render widocznego obszaru". */
 function sendViewbox() {
   if (!viewportRender || previewMode !== "wpf") return;
+  // koalescencja: nie wysyłaj kolejnego wycinka, póki poprzedni render nie wrócił
+  if (dragCoalesce && viewboxInFlight) {
+    viewboxDirty = true;
+    return;
+  }
   const sc = scrollEl();
   const ze = zoomEl().getBoundingClientRect();
   const scR = sc.getBoundingClientRect();
@@ -1366,8 +1371,12 @@ function sendViewbox() {
     h: Math.max(1, Math.round(vh)),
     zoom,
   });
+  viewboxInFlight = true;
+  viewboxDirty = false;
 }
 let viewboxPending = false;
+let viewboxInFlight = false; // koalescencja: tylko 1 render wycinka „w locie"
+let viewboxDirty = false; // jest nowszy stan czekający na wysłanie
 function scheduleViewbox() {
   if (!viewportRender || viewboxPending) return;
   viewboxPending = true;
@@ -1744,6 +1753,8 @@ window.addEventListener("message", (e) => {
       }
       // klatka wróciła → zwolnij „in-flight" i ewentualnie wyślij najnowszy stan
       renderInFlight = false;
+      viewboxInFlight = false;
+      if (viewboxDirty && !drag) sendViewbox(); // dosyłka najświeższego wycinka
       if (drag) {
         trySendDragFrame(performance.now());
         // podczas drag nie przebudowujemy całego podglądu (overlay już jedzie),
@@ -1754,6 +1765,8 @@ window.addEventListener("message", (e) => {
       }
       break;
     case "renderError":
+      renderInFlight = false;
+      viewboxInFlight = false;
       hostPng = null; // spadek na renderer web
       renderPreview();
       setStatus();
