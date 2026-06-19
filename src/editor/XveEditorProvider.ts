@@ -132,15 +132,18 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     let renderCap = 2560; // limit rozdzielczości renderu hosta (px); 0 = bez limitu
     const rW = () => (useRealSize ? viewW : 1200);
     const rH = () => (useRealSize ? viewH : 900);
-    // render tylko widocznego obszaru (opcja)
-    let viewportRender = false;
+    // render tylko widocznego obszaru (domyślnie wł.)
+    let viewportRender = true;
     let vbX = 0;
     let vbY = 0;
     let vbW = 0;
     let vbH = 0;
     let curZoom = 1;
+    // slice tylko gdy webview przysłał realny prostokąt — inaczej pełny render
     const vbExtra = (): Record<string, unknown> =>
-      viewportRender ? { viewbox: { x: vbX, y: vbY, w: vbW, h: vbH }, zoom: curZoom } : {};
+      viewportRender && vbW > 0 && vbH > 0
+        ? { viewbox: { x: vbX, y: vbY, w: vbW, h: vbH }, zoom: curZoom }
+        : {};
 
     const sendDoc = () => {
       const text = document.getText();

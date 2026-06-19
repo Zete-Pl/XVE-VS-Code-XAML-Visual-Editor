@@ -6,16 +6,21 @@ edycja zmienia wyłącznie to, co trzeba, a reszta pliku pozostaje bajt-w-bajt n
 
 > Osobne repozytorium. Aplikacja WPF służy jako referencja zachowań, nie współdzielimy kodu.
 
-## Status — Etap 5 (host WPF, Windows) + Ustawienia
+## Status — Etap 6 (zoom + host WPF + ustawienia)
 
 Zrobione:
-- **Panel Ustawień** (⚙ w pasku) z wyborem **silnika podglądu**: Auto / Web (cross‑platform) /
-  WPF host (Windows). Na nie‑Windows tylko web.
-- **Host WPF** (`wpf-host/`, .NET 10): proces `xve-wpf-host.exe` renderuje XAML **prawdziwym
-  silnikiem WPF** do PNG i zwraca mapę hit‑test (prostokąty wg `x:Uid`). Protokół JSON‑lines.
-- **Tryb PNG w podglądzie**: gdy backend = WPF host, podgląd to wierny obraz; klik mapuje się
-  na element przez hit‑test (selekcja + właściwości + Changes działają; edycja przez panel
-  re‑renderuje). Łagodny **fallback na web** przy błędzie/timeout hosta.
+- **Zoom** (oba tryby): kontrolka **− / % / + / Dopasuj** w pasku oraz **Ctrl+scroll**
+  (z zakotwiczeniem na kursorze); zakres 10–800%. Linijki/snap/prowadnice respektują zoom.
+- **Host WPF** (`wpf-host/`, .NET 10): `xve-wpf-host.exe` renderuje XAML **prawdziwym silnikiem
+  WPF** → PNG + mapa hit‑test (`x:Uid`). Protokół JSON‑lines.
+- **Wydajność hosta**: trwała sesja przeciągania (cache drzewa), koalescencja in‑flight,
+  **render tylko widocznego obszaru** (`viewbox`, 1:1, ostro niezależnie od rozmiaru okna),
+  konfigurowalny **limit rozdzielczości**.
+- **Panel Ustawień** (⚙): wybór silnika (Auto / Web / WPF host — host tylko Windows) oraz
+  opcje trybu host (strategia podglądu przeciągania, trwała sesja, koalescencja, realny
+  rozmiar, limit rozdzielczości, render widocznego obszaru).
+- **Domyślnie**: render widocznego obszaru + podgląd przeciągania „co 25 ms" (wł.).
+- Ikona wtyczki: `Assets/iconXVE2.ico` (przy publikacji do Marketplace wymagany PNG 128×128).
 - Budowa hosta: `npm run build:host` (wymaga .NET 10 SDK, Windows).
 
 Wcześniej — Etap 4 (diff / Changes):

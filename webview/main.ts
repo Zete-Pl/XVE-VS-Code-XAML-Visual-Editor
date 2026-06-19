@@ -36,10 +36,10 @@ let hostVx = 0; // wycinek (slice) renderu — w trybie „widoczny obszar"
 let hostVy = 0;
 let hostVw = 0;
 let hostVh = 0;
-let viewportRender = false; // render tylko widocznego obszaru (opcja)
+let viewportRender = true; // render tylko widocznego obszaru (domyślnie wł.)
 const hostRects = new Map<number, { x: number; y: number; w: number; h: number }>();
 // strategia podglądu przeciągania w trybie PNG (host WPF)
-let dragPreviewMode: "overlay" | "frames" | "ms" = "overlay";
+let dragPreviewMode: "overlay" | "frames" | "ms" = "ms";
 let dragFrames = 2; // co ile klatek re-render
 let dragMs = 25; // co ile ms re-render
 let dragSession = true; // trwała sesja hosta (szybciej) vs pełny re-render co klatkę
@@ -143,6 +143,7 @@ function renderPreview() {
   applyZoomTransform();
   updateOverlay();
   drawDecorations();
+  scheduleViewbox(); // tryb „widoczny obszar": doślij aktualny wycinek (guard kluczem)
 }
 
 function hitTestRects(x: number, y: number): number | null {
@@ -1235,7 +1236,12 @@ function buildPreviewTools() {
   zIn.textContent = "+";
   zIn.title = T("Zoom.In");
   zIn.onclick = () => setZoom(zoom * 1.25);
-  zoomGroup.append(zOut, zLabel, zIn);
+  const zFit = document.createElement("button");
+  zFit.className = "tool-btn";
+  zFit.textContent = T("Zoom.Fit");
+  zFit.title = T("Zoom.FitTip");
+  zFit.onclick = () => fitZoom();
+  zoomGroup.append(zOut, zLabel, zIn, zFit);
   host.appendChild(zoomGroup);
 
   host.appendChild(sep());
@@ -1348,11 +1354,6 @@ function reportViewport() {
 /** Wysyła widoczny prostokąt (jednostki projektu) do hosta — tryb „render widocznego obszaru". */
 function sendViewbox() {
   if (!viewportRender || previewMode !== "wpf") return;
-  // koalescencja: nie wysyłaj kolejnego wycinka, póki poprzedni render nie wrócił
-  if (dragCoalesce && viewboxInFlight) {
-    viewboxDirty = true;
-    return;
-  }
   const sc = scrollEl();
   const ze = zoomEl().getBoundingClientRect();
   const scR = sc.getBoundingClientRect();
@@ -1363,20 +1364,26 @@ function sendViewbox() {
   let vh = sc.clientHeight / zoom + margin * 2;
   if (hostW > 0) vw = Math.min(vw, hostW - vx);
   if (hostH > 0) vh = Math.min(vh, hostH - vy);
-  vscode.postMessage({
-    type: "viewbox",
-    x: Math.round(vx),
-    y: Math.round(vy),
-    w: Math.max(1, Math.round(vw)),
-    h: Math.max(1, Math.round(vh)),
-    zoom,
-  });
+  const rx = Math.round(vx);
+  const ry = Math.round(vy);
+  const rw = Math.max(1, Math.round(vw));
+  const rh = Math.max(1, Math.round(vh));
+  const key = `${rx},${ry},${rw},${rh},${zoom.toFixed(3)}`;
+  if (key === lastVbKey) return; // bez zmian → nie wysyłaj (unik pętli render→viewbox)
+  // koalescencja: nie wysyłaj kolejnego wycinka, póki poprzedni render nie wrócił
+  if (dragCoalesce && viewboxInFlight) {
+    viewboxDirty = true;
+    return;
+  }
+  lastVbKey = key;
+  vscode.postMessage({ type: "viewbox", x: rx, y: ry, w: rw, h: rh, zoom });
   viewboxInFlight = true;
   viewboxDirty = false;
 }
 let viewboxPending = false;
 let viewboxInFlight = false; // koalescencja: tylko 1 render wycinka „w locie"
 let viewboxDirty = false; // jest nowszy stan czekający na wysłanie
+let lastVbKey = ""; // ostatnio wysłany wycinek (unik pętli render→viewbox)
 function scheduleViewbox() {
   if (!viewportRender || viewboxPending) return;
   viewboxPending = true;
@@ -1438,6 +1445,18 @@ function setZoom(z: number, anchorX?: number, anchorY?: number) {
 function updateZoomLabel() {
   const el = document.getElementById("zoom-label");
   if (el) el.textContent = Math.round(zoom * 100) + "%";
+}
+/** Dopasowuje zoom tak, by cała powierzchnia zmieściła się w widoku. */
+function fitZoom() {
+  const s = surfaceEl();
+  const sc = scrollEl();
+  const sw = s.offsetWidth;
+  const sh = s.offsetHeight;
+  if (sw <= 0 || sh <= 0) return;
+  const z = Math.min((sc.clientWidth - 48) / sw, (sc.clientHeight - 48) / sh);
+  setZoom(z);
+  sc.scrollLeft = 0;
+  sc.scrollTop = 0;
 }
 
 function cssVar(name: string, fallback: string): string {

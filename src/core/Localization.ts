@@ -68,6 +68,8 @@ const MAP: Record<string, string[]> = {
   "Zoom.In": ["Zoom in", "Powiększ", "Acercar", "Vergrößern", "Zoom avant", "拡大", "放大"],
   "Zoom.Out": ["Zoom out", "Pomniejsz", "Alejar", "Verkleinern", "Zoom arrière", "縮小", "缩小"],
   "Zoom.Reset": ["Reset zoom to 100%", "Przywróć zoom 100%", "Restablecer zoom al 100%", "Zoom auf 100% zurücksetzen", "Réinitialiser le zoom à 100%", "ズームを100%に戻す", "重置缩放为 100%"],
+  "Zoom.Fit": ["Fit", "Dopasuj", "Ajustar", "Anpassen", "Ajuster", "全体", "适应"],
+  "Zoom.FitTip": ["Fit the whole view to the window", "Dopasuj cały widok do okna", "Ajustar toda la vista a la ventana", "Gesamte Ansicht an das Fenster anpassen", "Ajuster toute la vue à la fenêtre", "ビュー全体をウィンドウに合わせる", "将整个视图适应窗口"],
   "Status.ParsedElements": ["{0} elements", "{0} elementów", "{0} elementos", "{0} Elemente", "{0} éléments", "{0} 個の要素", "{0} 个元素"],
   "Status.PreviewSoon": [
     "Visual preview arrives in stage 1 — structure & source available now",
