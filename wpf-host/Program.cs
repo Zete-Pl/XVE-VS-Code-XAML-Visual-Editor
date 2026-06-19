@@ -33,6 +33,9 @@ internal static class Program
     private static double _vbX, _vbY, _vbW, _vbH;
     private static double _zoom = 1;
 
+    // motyw podglądu: none (klasyczny) | system | light | dark (Fluent przez ThemeMode)
+    private static string _theme = "none";
+
     // cache trwałej sesji przeciągania (jeden proces → pola statyczne)
     private static FrameworkElement? _dragRoot;
     private static Dictionary<string, FrameworkElement>? _dragMap;
@@ -43,6 +46,8 @@ internal static class Program
     private static void Main()
     {
         Console.OutputEncoding = Encoding.UTF8;
+        // Application zapewnia kontekst zasobów (motyw Fluent przez Application.ThemeMode)
+        if (Application.Current == null) _ = new Application();
         string? line;
         while ((line = Console.ReadLine()) != null)
         {
@@ -65,6 +70,7 @@ internal static class Program
                     _vbH = vbEl.GetProperty("h").GetDouble();
                 }
                 else _hasVb = false;
+                if (root.TryGetProperty("theme", out var thEl)) _theme = thEl.GetString() ?? "none";
                 var cmd = root.TryGetProperty("cmd", out var c) ? c.GetString() : null;
                 switch (cmd)
                 {
@@ -117,6 +123,20 @@ internal static class Program
     /// <summary>Parsuje + sanityzuje XAML, buduje renderowalny korzeń, mierzy/układa.</summary>
     private static Surface BuildSurface(string xaml, int width, int height)
     {
+        // motyw musi być ustawiony PRZED parsowaniem (kontrolki dostają style motywu)
+        try
+        {
+            if (Application.Current != null)
+                Application.Current.ThemeMode = _theme switch
+                {
+                    "light" => ThemeMode.Light,
+                    "dark" => ThemeMode.Dark,
+                    "system" => ThemeMode.System,
+                    _ => ThemeMode.None,
+                };
+        }
+        catch { /* starszy runtime bez ThemeMode */ }
+
         string cleaned = Sanitize(xaml);
         object parsed = XamlReader.Parse(cleaned);
         string? rootUid = (parsed as FrameworkElement)?.Uid;
@@ -129,7 +149,15 @@ internal static class Program
             win.Content = null;
             if (!double.IsNaN(win.Width)) surfW = win.Width;
             if (!double.IsNaN(win.Height)) surfH = win.Height;
-            rootFe = new Border { Width = surfW, Height = surfH, Background = win.Background ?? Brushes.White, Child = content };
+            // tło: jawne z XAML respektujemy; brak → tło wg motywu (ciemne/jasne)
+            bool explicitBg = win.ReadLocalValue(Control.BackgroundProperty) != DependencyProperty.UnsetValue;
+            rootFe = new Border
+            {
+                Width = surfW,
+                Height = surfH,
+                Background = explicitBg ? win.Background : ThemedBackground(),
+                Child = content,
+            };
         }
         else if (parsed is FrameworkElement fe)
         {
@@ -266,6 +294,10 @@ internal static class Program
         _dragRoot.UpdateLayout();
         return RenderResult(id, new Surface(_dragRoot, _dragW, _dragH, _dragRootUid));
     }
+
+    /// <summary>Tło powierzchni zależne od motywu (gdy okno nie definiuje własnego).</summary>
+    private static Brush ThemedBackground() =>
+        _theme == "dark" ? new SolidColorBrush(Color.FromRgb(0x20, 0x20, 0x20)) : Brushes.White;
 
     private static Thickness ParseThickness(string v)
     {

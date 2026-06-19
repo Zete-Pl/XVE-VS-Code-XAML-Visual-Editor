@@ -8,6 +8,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>xve-wpf-host</AssemblyName>
     <LangVersion>latest</LangVersion>
+    <!-- ThemeMode (Fluent) jest oznaczone [Experimental] (WPF0001) — świadomie używamy -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <!-- proces pomocniczy: bez okna, renderuje XAML do PNG + mapy hit-test -->
   </PropertyGroup>
 

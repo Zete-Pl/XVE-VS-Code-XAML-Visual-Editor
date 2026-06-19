@@ -47,6 +47,7 @@ let dragCoalesce = true; // koalescencja: tylko 1 klatka „w locie" (odrzuca za
 let dragRealSize = true; // render w rzeczywistym rozmiarze viewportu vs sztywne 1200×900
 let renderCap = 2560; // limit rozdzielczości renderu hosta (px); 0 = bez limitu
 let zoom = 1; // skala podglądu (1 = 100%)
+let previewTheme = "none"; // motyw podglądu hosta: none | system | light | dark
 const nodeById = new Map<number, RenderNode>();
 const parentById = new Map<number, RenderNode | null>();
 let clipboardXml: string | null = null;
@@ -591,9 +592,37 @@ function buildSettings() {
   }
   panel.appendChild(sec);
 
-  // strategia podglądu przeciągania — tylko gdy aktywny host WPF
+  // opcje trybu host — tylko gdy aktywny host WPF
   const wpfActive = isWindows && (backend === "wpf-host" || backend === "auto");
   if (!wpfActive) return;
+
+  // motyw podglądu (host WPF)
+  const themeSec = document.createElement("div");
+  themeSec.className = "settings-section";
+  const tLabel = document.createElement("div");
+  tLabel.className = "field-name";
+  tLabel.textContent = T("Settings.PreviewTheme");
+  themeSec.appendChild(tLabel);
+  const tSel = document.createElement("select");
+  tSel.className = "field-input";
+  for (const [val, label] of [
+    ["none", T("Theme.Classic")],
+    ["system", T("Theme.System")],
+    ["light", T("Theme.Light")],
+    ["dark", T("Theme.Dark")],
+  ]) {
+    const o = document.createElement("option");
+    o.value = val;
+    o.textContent = label;
+    tSel.appendChild(o);
+  }
+  tSel.value = previewTheme;
+  tSel.onchange = () => {
+    previewTheme = tSel.value;
+    vscode.postMessage({ type: "setPreviewTheme", value: previewTheme });
+  };
+  themeSec.appendChild(tSel);
+  panel.appendChild(themeSec);
 
   const drag = document.createElement("div");
   drag.className = "settings-section";

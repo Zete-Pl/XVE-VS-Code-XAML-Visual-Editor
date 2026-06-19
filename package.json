@@ -4,7 +4,7 @@
   "description": "Visual editor for hand-written XAML files — structure tree, live preview and surgical save, inside VS Code.",
   "version": "0.1.0",
   "publisher": "zete",
-  "icon": "Assets/iconXVE2.ico",
+  "icon": "Assets/iconXVE128.png",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "vscode": "^1.90.0"
@@ -39,7 +39,8 @@
     "commands": [
       {
         "command": "xve.openVisualEditor",
-        "title": "XVE: Open in XAML Visual Editor"
+        "title": "XVE: Open in XAML Visual Editor",
+        "icon": "Assets/iconXVE128.png"
       }
     ],
     "menus": {

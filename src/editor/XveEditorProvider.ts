@@ -65,12 +65,11 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     post: (m: unknown) => void,
     width: number,
     height: number,
-    cap: number,
-    extra: Record<string, unknown> = {}
+    opts: Record<string, unknown> = {}
   ): Promise<void> {
     try {
       const hostXaml = new XamlDocument(document.getText()).toHostXaml();
-      const r = await this.getHost().request({ cmd: "render", xaml: hostXaml, width, height, cap, ...extra });
+      const r = await this.getHost().request({ cmd: "render", xaml: hostXaml, width, height, ...opts });
       if (r.ok && r.png) this.postRender(post, r);
       else post({ type: "renderError", error: r.error ?? "render failed" });
     } catch (e) {
@@ -139,11 +138,14 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
     let vbW = 0;
     let vbH = 0;
     let curZoom = 1;
+    let previewTheme = "none"; // motyw podglądu hosta: none | system | light | dark
     // slice tylko gdy webview przysłał realny prostokąt — inaczej pełny render
     const vbExtra = (): Record<string, unknown> =>
       viewportRender && vbW > 0 && vbH > 0
         ? { viewbox: { x: vbX, y: vbY, w: vbW, h: vbH }, zoom: curZoom }
         : {};
+    // wspólne opcje renderu hosta (limit + motyw + ewentualny viewbox)
+    const hostOpts = (): Record<string, unknown> => ({ cap: renderCap, theme: previewTheme, ...vbExtra() });
 
     const sendDoc = () => {
       const text = document.getText();
@@ -161,7 +163,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
         previewMode: this.useWpfHost() ? "wpf" : "web",
       });
       this.applyInlineDiff(document, baselineText, showInlineDiff);
-      if (this.useWpfHost()) void this.renderViaHost(document, post, rW(), rH(), renderCap, vbExtra());
+      if (this.useWpfHost()) void this.renderViaHost(document, post, rW(), rH(), hostOpts());
     };
 
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
@@ -246,7 +248,7 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           if (this.useWpfHost()) {
             const doc = new XamlDocument(document.getText());
             doc.setAttributes(msg.id, msg.attrs);
-            const r = await this.getHost().request({ cmd: "render", xaml: doc.toHostXaml(), width: rW(), height: rH(), cap: renderCap, ...vbExtra() });
+            const r = await this.getHost().request({ cmd: "render", xaml: doc.toHostXaml(), width: rW(), height: rH(), ...hostOpts() });
             if (r.ok && r.png) this.postRender(post, r);
           }
           break;
@@ -254,13 +256,13 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           // trwała sesja: host parsuje RAZ i cache'uje żywe drzewo
           if (this.useWpfHost()) {
             const hostXaml = new XamlDocument(document.getText()).toHostXaml();
-            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: rW(), height: rH(), cap: renderCap, ...vbExtra() });
+            const r = await this.getHost().request({ cmd: "dragStart", xaml: hostXaml, width: rW(), height: rH(), ...hostOpts() });
             if (r.ok && r.png) this.postRender(post, r);
           }
           break;
         case "dragUpdate":
           if (this.useWpfHost()) {
-            const r = await this.getHost().request({ cmd: "dragUpdate", uid: "u" + msg.id, attrs: msg.attrs, ...vbExtra() });
+            const r = await this.getHost().request({ cmd: "dragUpdate", uid: "u" + msg.id, attrs: msg.attrs, ...hostOpts() });
             if (r.ok && r.png) this.postRender(post, r);
           }
           break;
@@ -282,8 +284,12 @@ export class XveEditorProvider implements vscode.CustomTextEditorProvider {
           vbH = msg.h ?? 0;
           if (typeof msg.zoom === "number" && msg.zoom > 0) curZoom = msg.zoom;
           if (viewportRender && this.useWpfHost()) {
-            void this.renderViaHost(document, post, rW(), rH(), renderCap, vbExtra());
+            void this.renderViaHost(document, post, rW(), rH(), hostOpts());
           }
+          break;
+        case "setPreviewTheme":
+          previewTheme = ["none", "system", "light", "dark"].includes(msg.value) ? msg.value : "none";
+          sendDoc();
           break;
         case "setRealSize":
           useRealSize = !!msg.enabled;
