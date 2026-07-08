@@ -396,6 +396,7 @@
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
     "@vscode/codicons": "^0.0.45",
+    "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.23.0",
     "playwright": "^1.48.0",
     "typescript": "^5.5.0"
