@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="510" viewBox="0 0 900 510" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="900" height="510" rx="10" fill="#f4f6f8" stroke="#c5ccd3"/>
+  <text x="450" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#1f2a37">XVE — architecture</text>
+
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#5b6b7b"/>
+    </marker>
+  </defs>
+
+  <!-- Extension host -->
+  <rect x="30" y="70" width="270" height="400" rx="10" fill="#ffffff" stroke="#c5ccd3"/>
+  <text x="165" y="96" text-anchor="middle" font-size="14" font-weight="700" fill="#1f2a37">Extension host (Node / TS)</text>
+  <rect x="50" y="112" width="230" height="34" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="165" y="134" text-anchor="middle" font-size="12" fill="#42505e">extension.ts — activate, commands</text>
+  <rect x="50" y="154" width="230" height="34" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="165" y="176" text-anchor="middle" font-size="12" fill="#42505e">XveEditorProvider</text>
+  <rect x="50" y="200" width="230" height="160" rx="6" fill="#f7f9fb" stroke="#c5ccd3"/>
+  <text x="165" y="220" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2a37">core/</text>
+  <g font-size="11.5" fill="#42505e">
+    <text x="64" y="242">XamlDocument — surgical save</text>
+    <text x="64" y="262">XamlParser — tokens + offsets</text>
+    <text x="64" y="282">StructuralDiff · LineDiff</text>
+    <text x="64" y="302">TypeRegistry · ProjectScanner</text>
+    <text x="64" y="322">ResourceModel — styles / brushes</text>
+    <text x="64" y="342">PasteNames — x:Name dedup</text>
+  </g>
+  <rect x="50" y="372" width="230" height="34" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="165" y="394" text-anchor="middle" font-size="12" fill="#42505e">core/Localization (7 languages)</text>
+  <rect x="50" y="414" width="230" height="34" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="165" y="436" text-anchor="middle" font-size="12" fill="#42505e">host/WpfHost — process mgr</text>
+
+  <!-- Webview -->
+  <rect x="350" y="70" width="250" height="400" rx="10" fill="#ffffff" stroke="#c5ccd3"/>
+  <text x="475" y="96" text-anchor="middle" font-size="14" font-weight="700" fill="#1f2a37">Webview (HTML/CSS/TS)</text>
+  <rect x="370" y="120" width="210" height="40" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="475" y="145" text-anchor="middle" font-size="12" fill="#42505e">main.ts — tree, props, UI</text>
+  <rect x="370" y="172" width="210" height="40" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="475" y="197" text-anchor="middle" font-size="12" fill="#42505e">renderer.ts — XAML→DOM (web)</text>
+  <rect x="370" y="224" width="210" height="44" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="475" y="243" text-anchor="middle" font-size="12" fill="#42505e">styleResolver.ts — XAML</text>
+  <text x="475" y="259" text-anchor="middle" font-size="12" fill="#42505e">styles → CSS</text>
+  <rect x="370" y="280" width="210" height="40" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="475" y="305" text-anchor="middle" font-size="12" fill="#42505e">style.css — 3-panel layout</text>
+  <rect x="370" y="336" width="210" height="112" rx="6" fill="#f7f9fb" stroke="#c5ccd3"/>
+  <text x="475" y="358" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2a37">Preview surface</text>
+  <text x="475" y="380" text-anchor="middle" font-size="11" fill="#42505e">Web DOM  or  PNG from host</text>
+  <text x="475" y="400" text-anchor="middle" font-size="11" fill="#42505e">+ hit-test rects (x:Uid)</text>
+  <text x="475" y="420" text-anchor="middle" font-size="11" fill="#42505e">selection · zoom · rulers</text>
+  <text x="475" y="440" text-anchor="middle" font-size="11" fill="#42505e">toolbar · changes · console</text>
+
+  <!-- WPF host -->
+  <rect x="650" y="130" width="220" height="300" rx="10" fill="#ffffff" stroke="#c5ccd3"/>
+  <text x="760" y="156" text-anchor="middle" font-size="14" font-weight="700" fill="#1f2a37">WPF host (Windows)</text>
+  <text x="760" y="176" text-anchor="middle" font-size="11" fill="#7a8794">xve-wpf-host.exe · .NET 10</text>
+  <rect x="668" y="190" width="184" height="34" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="760" y="212" text-anchor="middle" font-size="11.5" fill="#42505e">real WPF render → PNG</text>
+  <rect x="668" y="232" width="184" height="34" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="760" y="254" text-anchor="middle" font-size="11.5" fill="#42505e">themes · supersampling</text>
+  <rect x="668" y="274" width="184" height="34" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="760" y="296" text-anchor="middle" font-size="11.5" fill="#42505e">project resources (DLL/xaml)</text>
+  <rect x="668" y="316" width="184" height="34" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="760" y="338" text-anchor="middle" font-size="11.5" fill="#42505e">hit-test · drag session</text>
+  <rect x="668" y="358" width="184" height="34" rx="6" fill="#eef2f6" stroke="#c5ccd3"/>
+  <text x="760" y="380" text-anchor="middle" font-size="11.5" fill="#42505e">shared or isolated per file</text>
+  <text x="760" y="412" text-anchor="middle" font-size="10.5" font-style="italic" fill="#7a8794">needs .NET 10 Desktop Runtime</text>
+
+  <!-- arrows -->
+  <line x1="300" y1="250" x2="348" y2="250" stroke="#5b6b7b" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="350" y1="270" x2="302" y2="270" stroke="#5b6b7b" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="324" y="240" text-anchor="middle" font-size="10" fill="#5b6b7b">postMessage</text>
+
+  <!-- host WPF: trasa poprowadzona pod kartami, żeby nie przecinać powierzchni podglądu -->
+  <path d="M165,448 L165,492 L760,492 L760,432" fill="none" stroke="#5b6b7b" stroke-width="2"
+        marker-end="url(#arr)" stroke-dasharray="5 4"/>
+  <rect x="330" y="482" width="290" height="18" fill="#f4f6f8"/>
+  <text x="475" y="496" text-anchor="middle" font-size="10" fill="#5b6b7b">JSON-lines over stdio (render / drag / resources)</text>
+</svg>

@@ -1,0 +1,16 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Default control sizes" Width="320" Height="360">
+	<!-- Kontrolki BEZ jawnych Width/Height. WPF nadaje im konkretny rozmiar intrinsic (padding,
+	     domyślna wysokość). Web musi to odwzorować, inaczej rozmiary się rozjadą. -->
+	<StackPanel Margin="12">
+		<Button Content="Przycisk" />
+		<Button Content="Dłuższy przycisk" Margin="0,8,0,0" />
+		<TextBox Text="Pole tekstowe" Margin="0,8,0,0" />
+		<CheckBox Content="Pole wyboru" Margin="0,8,0,0" />
+		<RadioButton Content="Opcja A" Margin="0,8,0,0" />
+		<ComboBox SelectedIndex="0" Margin="0,8,0,0">
+			<ComboBoxItem>Pierwszy</ComboBoxItem>
+			<ComboBoxItem>Drugi</ComboBoxItem>
+		</ComboBox>
+		<Label Content="Etykieta" Margin="0,8,0,0" />
+	</StackPanel>
+</Window>

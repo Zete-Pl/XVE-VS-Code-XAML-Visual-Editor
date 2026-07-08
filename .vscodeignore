@@ -1,0 +1,37 @@
+# Co NIE trafia do .vsix. Uwaga: vsce nie czyta .gitignore.
+# Semantyka jak w .gitignore — nie da się od-wykluczyć pliku wewnątrz wykluczonego katalogu,
+# dlatego wpf-host filtrujemy pozytywnie (bin/Release/** zostaje w paczce).
+
+.vscode/**
+.github/**
+.claude/**
+node_modules/**
+
+src/**
+test/**
+tools/**
+tmp/**
+webview/**
+samples/**
+docs/**
+
+# do paczki idzie wyłącznie wpf-host/dist/{win-x64,win-arm64} (z `npm run build:host:dist`);
+# wpf-host/bin to szybki dev-build dla F5 — nie ma czego szukać w .vsix
+wpf-host/bin/**
+wpf-host/obj/**
+wpf-host/*.cs
+wpf-host/*.csproj
+wpf-host/.gitignore
+
+esbuild.mjs
+tsconfig.json
+package-lock.json
+.gitignore
+.vscodeignore
+
+# harness testów parity — budowany do dist/, ale nieużywany w runtime rozszerzenia
+dist/parity-harness.js
+
+**/*.pdb
+**/*.map
+**/*.ts

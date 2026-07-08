@@ -72,3 +72,61 @@ test("structuralDiff: brak zmian → pusta lista", () => {
   const src = `<Grid>\n  <Button Content="A"/>\n</Grid>`;
   assert.deepEqual(structuralDiff(new XamlDocument(src), new XamlDocument(src)), []);
 });
+
+test("structuralDiff: przeniesienie między rodzicami → event moved (nie removed+added)", () => {
+  const base = new XamlDocument(
+    `<Root>\n  <StackPanel x:Name="sp">\n    <Button x:Name="b"/>\n  </StackPanel>\n  <Grid x:Name="g">\n  </Grid>\n</Root>`
+  );
+  const cur = new XamlDocument(
+    `<Root>\n  <StackPanel x:Name="sp">\n  </StackPanel>\n  <Grid x:Name="g">\n    <Button x:Name="b"/>\n  </Grid>\n</Root>`
+  );
+  const ch = structuralDiff(base, cur);
+  const moved = ch.filter((c) => c.kind === "moved");
+  assert.equal(moved.length, 1);
+  assert.equal(ch.filter((c) => c.kind === "added").length, 0);
+  assert.equal(ch.filter((c) => c.kind === "removed").length, 0);
+  const mv = moved[0];
+  if (mv.kind === "moved") {
+    assert.equal(mv.tag, "Button");
+    // revert wraca do StackPanel (rodzic bazowy) — w bieżącym drzewie to jego odpowiednik
+    assert.equal(typeof mv.revertParentId, "number");
+    assert.equal(mv.baseLine, 3); // <Button> w baseline jest w 3. linii
+  }
+});
+
+test("structuralDiff: przestawienie rodzeństwa → moved", () => {
+  const base = new XamlDocument(`<S>\n  <Button x:Name="a"/>\n  <Button x:Name="b"/>\n</S>`);
+  const cur = new XamlDocument(`<S>\n  <Button x:Name="b"/>\n  <Button x:Name="a"/>\n</S>`);
+  const ch = structuralDiff(base, cur);
+  assert.equal(ch.filter((c) => c.kind === "moved").length, 1);
+  assert.equal(ch.filter((c) => c.kind === "added" || c.kind === "removed" || c.kind === "attrs").length, 0);
+});
+
+test("structuralDiff: zmiana atrybutu niesie linię i pełne atrybuty obu stron", () => {
+  const base = new XamlDocument(`<Grid>\n  <Button Content="A" Width="100"/>\n</Grid>`);
+  const cur = new XamlDocument(`<Grid>\n  <Button Content="A" Width="123"/>\n</Grid>`);
+  const ch = structuralDiff(base, cur);
+  assert.equal(ch.length, 1);
+  if (ch[0].kind === "attrs") {
+    assert.equal(ch[0].line, 2); // <Button> w 2. linii
+    assert.deepEqual(ch[0].baselineAttrs, [
+      { name: "Content", value: "A" },
+      { name: "Width", value: "100" },
+    ]);
+    assert.deepEqual(ch[0].currentAttrs, [
+      { name: "Content", value: "A" },
+      { name: "Width", value: "123" },
+    ]);
+  }
+});
+
+test("structuralDiff: zmiana treści tekstowej → pseudo-atrybut (content)", () => {
+  const base = new XamlDocument(`<Grid>\n  <Button>OK</Button>\n</Grid>`);
+  const cur = new XamlDocument(`<Grid>\n  <Button>Cancel</Button>\n</Grid>`);
+  const ch = structuralDiff(base, cur);
+  assert.equal(ch.length, 1);
+  if (ch[0].kind === "attrs") {
+    assert.deepEqual(ch[0].attrs, [{ name: "(content)", baseline: "OK", current: "Cancel" }]);
+    assert.equal(ch[0].currentContent, "Cancel");
+  }
+});

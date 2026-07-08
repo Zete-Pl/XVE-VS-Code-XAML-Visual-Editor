@@ -1,0 +1,13 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="WrapPanel flow" Width="360" Height="320">
+	<!-- WrapPanel zawija elementy o różnych rozmiarach. Wysokość wiersza w WPF = najwyższe dziecko;
+	     liczba elementów w wierszu zależy od dostępnej szerokości. Test punktu zawinięcia. -->
+	<WrapPanel Margin="8">
+		<Border Width="80" Height="40" Background="#FFB0C4DE" Margin="4" />
+		<Border Width="120" Height="60" Background="#FF90EE90" Margin="4" />
+		<Border Width="60" Height="30" Background="#FFFFE4B5" Margin="4" />
+		<Border Width="100" Height="50" Background="#FFFFA07A" Margin="4" />
+		<Border Width="80" Height="40" Background="#FFDDA0DD" Margin="4" />
+		<Border Width="140" Height="70" Background="#FFADD8E6" Margin="4" />
+		<Border Width="70" Height="35" Background="#FFB0C4DE" Margin="4" />
+	</WrapPanel>
+</Window>

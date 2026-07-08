@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="900" height="420" rx="10" fill="#f4f6f8" stroke="#c5ccd3"/>
+  <text x="450" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#1f2a37">Preview backends</text>
+
+  <!-- Web renderer -->
+  <rect x="40" y="60" width="390" height="330" rx="10" fill="#ffffff" stroke="#c5ccd3"/>
+  <rect x="40" y="60" width="390" height="40" rx="10" fill="#eef2f6"/>
+  <text x="235" y="86" text-anchor="middle" font-size="15" font-weight="700" fill="#1f2a37">Web renderer</text>
+  <g font-size="12.5" fill="#42505e">
+    <text x="62" y="128">✓ Cross-platform (Win / macOS / Linux)</text>
+    <text x="62" y="154">✓ No external process — instant</text>
+    <text x="62" y="180">✓ XAML subset → HTML/CSS</text>
+    <text x="62" y="206">✓ Grid / Canvas / StackPanel / DockPanel</text>
+    <text x="62" y="232">✓ Common controls + shapes</text>
+    <text x="62" y="258">✓ StaticResource, Style / Setter, BasedOn,</text>
+    <text x="78" y="278">implicit styles (ResourceModel)</text>
+    <text x="62" y="304">~ Unknown types → grey placeholder</text>
+    <text x="62" y="330">~ Approximate fidelity (no real WPF)</text>
+    <text x="62" y="360" font-style="italic" fill="#7a8794">Theme 'native' (GTK/Linux look) available</text>
+  </g>
+
+  <!-- WPF host -->
+  <rect x="470" y="60" width="390" height="330" rx="10" fill="#ffffff" stroke="#c5ccd3"/>
+  <rect x="470" y="60" width="390" height="40" rx="10" fill="#eef2f6"/>
+  <text x="665" y="86" text-anchor="middle" font-size="15" font-weight="700" fill="#1f2a37">WPF host (Windows)</text>
+  <g font-size="12.5" fill="#42505e">
+    <text x="492" y="128">✓ Real WPF engine → pixel-accurate</text>
+    <text x="492" y="154">✓ Themes: Classic / '98 / Fluent light·dark·system</text>
+    <text x="492" y="180">✓ Project resources: custom-control DLLs,</text>
+    <text x="508" y="200">App.xaml, ResourceDictionaries</text>
+    <text x="492" y="226">✓ HiDPI supersampling, capped by maxResolution</text>
+    <text x="492" y="252">✓ Viewport render + adaptive resolution in motion</text>
+    <text x="492" y="278">✓ Drag session + in-flight coalescing</text>
+    <text x="492" y="304">✓ Shared or isolated host (per file resources)</text>
+    <text x="492" y="330">! Windows + .NET 10 Desktop Runtime</text>
+    <text x="492" y="360" font-style="italic" fill="#7a8794">Falls back to web renderer on failure</text>
+  </g>
+
+  <text x="450" y="410" text-anchor="middle" font-size="12" fill="#42505e">xve.previewBackend = auto  →  WPF host on Windows, web renderer elsewhere</text>
+</svg>

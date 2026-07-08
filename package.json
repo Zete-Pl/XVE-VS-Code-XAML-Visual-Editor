@@ -3,9 +3,21 @@
   "displayName": "XAML Visual Editor (XVE)",
   "description": "Visual editor for hand-written XAML files — structure tree, live preview and surgical save, inside VS Code.",
   "version": "0.1.0",
-  "publisher": "zete",
+  "publisher": "Zete",
   "icon": "Assets/iconXVE128.png",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Zete-Pl/XVE-VS-Code-XAML-Visual-Editor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Zete-Pl/XVE-VS-Code-XAML-Visual-Editor/issues"
+  },
+  "homepage": "https://github.com/Zete-Pl/XVE-VS-Code-XAML-Visual-Editor#readme",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -21,7 +33,6 @@
     "designer"
   ],
   "main": "./dist/extension.js",
-  "l10n": "./l10n",
   "activationEvents": [],
   "contributes": {
     "customEditors": [
@@ -41,13 +52,23 @@
         "command": "xve.openVisualEditor",
         "title": "XVE: Open in XAML Visual Editor",
         "icon": "Assets/iconXVE128.png"
+      },
+      {
+        "command": "xve.openTextEditor",
+        "title": "XVE: Open XAML as Text",
+        "icon": "$(code)"
       }
     ],
     "menus": {
       "editor/title": [
         {
           "command": "xve.openVisualEditor",
-          "when": "resourceExtname == .xaml",
+          "when": "resourceExtname == .xaml && activeCustomEditorId != xve.xamlEditor",
+          "group": "navigation"
+        },
+        {
+          "command": "xve.openTextEditor",
+          "when": "resourceExtname == .xaml && activeCustomEditorId == xve.xamlEditor",
           "group": "navigation"
         }
       ]
@@ -58,7 +79,16 @@
         "xve.language": {
           "type": "string",
           "default": "",
-          "enum": ["", "en", "pl", "es", "de", "fr", "ja", "zh"],
+          "enum": [
+            "",
+            "en",
+            "pl",
+            "es",
+            "de",
+            "fr",
+            "ja",
+            "zh"
+          ],
           "enumDescriptions": [
             "Use VS Code language",
             "English",
@@ -71,16 +101,281 @@
           ],
           "description": "UI language for the XAML Visual Editor. Empty = follow VS Code."
         },
+        "xve.project.autoLoadResources": {
+          "type": "string",
+          "default": "ask",
+          "enum": [
+            "ask",
+            "always",
+            "never"
+          ],
+          "enumDescriptions": [
+            "Ask once per project which DLLs / styles / dictionaries to load (WPF host)",
+            "Load all detected project resources automatically",
+            "Do not load project resources (built-in types only)"
+          ],
+          "markdownDescription": "WPF host: how to load project resources (custom-control DLLs, `App.xaml`, theme/resource dictionaries) for faithful preview of custom types. The choice is remembered per project.",
+          "scope": "window"
+        },
+        "xve.sync.selectInTextEditor": {
+          "type": "boolean",
+          "default": true,
+          "description": "When you select an element in the visual editor, move the cursor to it in a side-by-side text editor.",
+          "scope": "window"
+        },
+        "xve.sync.selectFromTextCursor": {
+          "type": "boolean",
+          "default": true,
+          "description": "When the cursor moves in a side-by-side text editor, select the matching element in the visual editor.",
+          "scope": "window"
+        },
+        "xve.editor.highlightChanges": {
+          "type": "boolean",
+          "default": true,
+          "description": "Color changed lines in the text editor (mirrors the \"Show changes in code\" toggle in the Changes panel).",
+          "scope": "window"
+        },
+        "xve.editor.highlightErrors": {
+          "type": "boolean",
+          "default": true,
+          "description": "Color and underline the line of a preview/render error in the text editor (mirrors the \"Show errors in code\" toggle in the WPF host log).",
+          "scope": "window"
+        },
+        "xve.paste.nameDeduplication": {
+          "type": "string",
+          "default": "off",
+          "enum": [
+            "off",
+            "rename",
+            "renameAndReferences"
+          ],
+          "enumDescriptions": [
+            "Paste exactly as copied. Pasting an element that has an x:Name/Name already present in the document creates a duplicate name (a build error in the project).",
+            "Rename x:Name/Name values that collide with existing names in the target document to a unique variant (e.g. btnOk_Copy). The source element is never modified.",
+            "Like \"rename\", and also update internal references (Binding ElementName, x:Reference) within the pasted subtree so the copy stays self-consistent."
+          ],
+          "description": "How to handle x:Name/Name collisions when pasting an element into the visual editor.",
+          "scope": "window"
+        },
         "xve.previewBackend": {
           "type": "string",
           "default": "auto",
-          "enum": ["auto", "web", "wpf-host"],
+          "enum": [
+            "auto",
+            "web",
+            "wpf-host"
+          ],
           "enumDescriptions": [
             "Auto-detect (WPF host on Windows, web renderer elsewhere)",
             "Cross-platform web renderer",
             "Windows WPF host (high fidelity)"
           ],
           "description": "Which preview engine to use."
+        },
+        "xve.preview.isolation": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "ask",
+            "auto",
+            "shared",
+            "isolated"
+          ],
+          "enumDescriptions": [
+            "Ask whether to isolate when a file is from another project or has no project",
+            "Auto: isolate when needed (file from another project / no project) without asking; share within the open project",
+            "Never isolate: always share a single WPF host and its resources across all windows",
+            "Always isolate: run a separate WPF host with its own resources for each file"
+          ],
+          "markdownDescription": "WPF host isolation policy. **Isolated** mode runs a fresh WPF host process with its own loaded resources for a file, so resources loaded by other windows/projects don't change how it renders.\n\n- `ask` — for a file from another project (or with no project) ask whether to isolate it.\n- `auto` — isolate such files automatically, without asking; share one host within the open project/workspace.\n- `shared` — never isolate (one host for everything).\n- `isolated` — always isolate (a separate host per file).\n\nThe choice can be overridden per window from the preview toolbar/engine selector.",
+          "scope": "window"
+        },
+        "xve.preview.renderScale": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "1",
+            "1.5",
+            "2",
+            "3"
+          ],
+          "enumDescriptions": [
+            "Match screen resolution (device pixel ratio)",
+            "1× (logical pixels)",
+            "1.5×",
+            "2×",
+            "3×"
+          ],
+          "markdownDescription": "WPF host render scale (supersampling). `auto` renders at the display's device-pixel resolution for a crisp preview on HiDPI screens. Higher values increase sharpness and CPU/memory use.",
+          "scope": "window"
+        },
+        "xve.preview.maxResolution": {
+          "type": "number",
+          "default": 1536,
+          "minimum": 0,
+          "markdownDescription": "Maximum WPF host bitmap size (longer side, in **device** pixels). Caps memory/transfer for large surfaces or high render scale. `0` = unlimited (full sharpness).",
+          "scope": "window"
+        },
+        "xve.preview.theme": {
+          "type": "string",
+          "default": "none",
+          "enum": [
+            "none",
+            "classic98",
+            "system",
+            "light",
+            "dark",
+            "native"
+          ],
+          "enumDescriptions": [
+            "Classic WPF theme",
+            "Classic '98 theme",
+            "Follow OS theme (Fluent)",
+            "Light (Fluent)",
+            "Dark (Fluent)",
+            "Native web look (GTK/Linux) — web renderer only"
+          ],
+          "description": "Preview theme. Fluent/classic mirror the WPF host (via ThemeMode); 'native' is a GTK/Linux-style look for the web renderer (the WPF host falls back to classic).",
+          "scope": "window"
+        },
+        "xve.preview.viewportRender": {
+          "type": "boolean",
+          "default": true,
+          "description": "WPF host: render only the visible region (viewport) instead of the whole surface. Faster for large designs.",
+          "scope": "window"
+        },
+        "xve.preview.capBasis": {
+          "type": "string",
+          "default": "visible",
+          "enum": [
+            "visible",
+            "slice"
+          ],
+          "enumDescriptions": [
+            "Apply the resolution cap to the visible area only — the same on-screen fragment stays equally sharp regardless of window size (overscan keeps the same density).",
+            "Apply the resolution cap to the whole rendered slice including overscan (legacy behavior)."
+          ],
+          "markdownDescription": "WPF host (visible-area render): what the `maxResolution` cap is measured against.",
+          "scope": "window"
+        },
+        "xve.preview.overscan": {
+          "type": "number",
+          "default": 100,
+          "minimum": 0,
+          "description": "WPF host (visible-area render): extra margin (in project units) rendered around the visible region as a buffer for scrolling.",
+          "scope": "window"
+        },
+        "xve.preview.debugConsole": {
+          "type": "boolean",
+          "default": false,
+          "description": "WPF host: show a debug console at the bottom of the preview with live render telemetry (render size, frame time, scale, viewbox, …).",
+          "scope": "window"
+        },
+        "xve.preview.consoleOnStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "WPF host: dock the console at the bottom of the preview while the host is starting up. When off, the console stays hidden during start-up but still appears automatically on a render/preview error.",
+          "scope": "window"
+        },
+        "xve.preview.debugLiveDrag": {
+          "type": "boolean",
+          "default": false,
+          "description": "Debug console: also update render telemetry on every frame while dragging an element in the preview.",
+          "scope": "window"
+        },
+        "xve.preview.dragStrategy": {
+          "type": "string",
+          "default": "ms",
+          "enum": [
+            "overlay",
+            "frames",
+            "ms"
+          ],
+          "enumDescriptions": [
+            "Overlay only (no live re-render)",
+            "Re-render every N frames",
+            "Re-render every N milliseconds"
+          ],
+          "description": "WPF host live-preview strategy while dragging/resizing.",
+          "scope": "window"
+        },
+        "xve.preview.dragIntervalMs": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "description": "Drag strategy 'ms': minimum interval between live re-renders (milliseconds).",
+          "scope": "window"
+        },
+        "xve.preview.dragFrames": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "description": "Drag strategy 'frames': re-render every N animation frames.",
+          "scope": "window"
+        },
+        "xve.preview.dragCoalesce": {
+          "type": "boolean",
+          "default": true,
+          "description": "WPF host: keep at most one render in flight during drag/scroll (drop stale frames).",
+          "scope": "window"
+        },
+        "xve.preview.dragSession": {
+          "type": "boolean",
+          "default": true,
+          "description": "WPF host: use a persistent drag session (parse once, mutate cached tree) instead of a full re-render each frame.",
+          "scope": "window"
+        },
+        "xve.preview.dragOnChange": {
+          "type": "boolean",
+          "default": true,
+          "description": "WPF host: during a drag, render a new frame only when the dragged element's attributes actually change (skip repeat frames when the pointer is held still).",
+          "scope": "window"
+        },
+        "xve.preview.adaptiveRes": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "WPF host: adaptive resolution — render at a low resolution (`motionResolution`) while dragging or scrolling/zooming, then re-render once at full `maxResolution` after motion stops. Smoother fast motion, sharp when idle.",
+          "scope": "window"
+        },
+        "xve.preview.motionResolution": {
+          "type": "number",
+          "default": 512,
+          "minimum": 0,
+          "description": "WPF host: render resolution (longer side, device px) used while moving when adaptive resolution is on.",
+          "scope": "window"
+        },
+        "xve.preview.adaptiveFpsThreshold": {
+          "type": "number",
+          "default": 30,
+          "minimum": 0,
+          "markdownDescription": "WPF host: only drop to the motion resolution while moving when the full-resolution render runs below this many FPS. `0` = always use the motion resolution while moving.",
+          "scope": "window"
+        },
+        "xve.preview.fitOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Fit the preview to the window when a document opens: shrink to fit if it is larger than the view, otherwise show at 100% (never magnify). The per-window state is remembered.",
+          "scope": "window"
+        },
+        "xve.canvas.gridStep": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "description": "Step & snap distance in pixels: grid step (when the grid is shown) and the snap threshold to guides (when rulers are shown).",
+          "scope": "window"
+        },
+        "xve.canvas.showGrid": {
+          "type": "boolean",
+          "default": false,
+          "description": "Default for showing the dot grid overlay in the preview (toggled live from the toolbar).",
+          "scope": "window"
+        },
+        "xve.canvas.showRulers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Default for showing rulers (and guides) in the preview (toggled live from the toolbar).",
+          "scope": "window"
         }
       }
     }
@@ -89,13 +384,20 @@
     "compile": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "build:host": "dotnet build wpf-host -c Release",
+    "build:host:dist": "dotnet publish wpf-host -c Release -r win-x64 --self-contained false -o wpf-host/dist/win-x64 && dotnet publish wpf-host -c Release -r win-arm64 --self-contained false -o wpf-host/dist/win-arm64",
     "vscode:prepublish": "node esbuild.mjs --production",
-    "test:unit": "node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/*.test.ts"
+    "docs:images": "node tools/docs/render-images.mjs",
+    "package": "npm run build:host:dist && vsce package",
+    "publish": "npm run build:host:dist && vsce publish",
+    "test:unit": "node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/*.test.ts",
+    "test:parity": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/parity/compare.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/codicons": "^0.0.45",
     "esbuild": "^0.23.0",
+    "playwright": "^1.48.0",
     "typescript": "^5.5.0"
   }
 }

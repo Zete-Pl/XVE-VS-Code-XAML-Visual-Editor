@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="260" viewBox="0 0 900 260" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="900" height="260" rx="10" fill="#f4f6f8" stroke="#c5ccd3"/>
+  <text x="450" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#1f2a37">Edit flow — surgical save</text>
+  <defs>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#5b6b7b"/>
+    </marker>
+  </defs>
+
+  <g font-size="12" fill="#1f2a37">
+    <rect x="24" y="70" width="150" height="80" rx="8" fill="#ffffff" stroke="#c5ccd3"/>
+    <text x="99" y="100" text-anchor="middle" font-weight="700">1. Edit</text>
+    <text x="99" y="120" text-anchor="middle" font-size="11" fill="#42505e">prop / drag /</text>
+    <text x="99" y="135" text-anchor="middle" font-size="11" fill="#42505e">resize / reorder</text>
+
+    <rect x="206" y="70" width="160" height="80" rx="8" fill="#ffffff" stroke="#c5ccd3"/>
+    <text x="286" y="100" text-anchor="middle" font-weight="700">2. Surgical save</text>
+    <text x="286" y="120" text-anchor="middle" font-size="11" fill="#42505e">XamlDocument —</text>
+    <text x="286" y="135" text-anchor="middle" font-size="11" fill="#42505e">offset-precise splice</text>
+
+    <rect x="398" y="70" width="160" height="80" rx="8" fill="#ffffff" stroke="#c5ccd3"/>
+    <text x="478" y="100" text-anchor="middle" font-weight="700">3. WorkspaceEdit</text>
+    <text x="478" y="120" text-anchor="middle" font-size="11" fill="#42505e">TextDocument =</text>
+    <text x="478" y="135" text-anchor="middle" font-size="11" fill="#42505e">source of truth</text>
+
+    <rect x="590" y="70" width="150" height="80" rx="8" fill="#ffffff" stroke="#c5ccd3"/>
+    <text x="665" y="100" text-anchor="middle" font-weight="700">4. Re-parse</text>
+    <text x="665" y="120" text-anchor="middle" font-size="11" fill="#42505e">tree + diff vs</text>
+    <text x="665" y="135" text-anchor="middle" font-size="11" fill="#42505e">saved baseline</text>
+
+    <rect x="772" y="70" width="104" height="80" rx="8" fill="#ffffff" stroke="#c5ccd3"/>
+    <text x="824" y="100" text-anchor="middle" font-weight="700">5. Re-render</text>
+    <text x="824" y="120" text-anchor="middle" font-size="11" fill="#42505e">web / WPF</text>
+    <text x="824" y="135" text-anchor="middle" font-size="11" fill="#42505e">preview</text>
+  </g>
+
+  <line x1="174" y1="110" x2="204" y2="110" stroke="#5b6b7b" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="366" y1="110" x2="396" y2="110" stroke="#5b6b7b" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="558" y1="110" x2="588" y2="110" stroke="#5b6b7b" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="740" y1="110" x2="770" y2="110" stroke="#5b6b7b" stroke-width="2" marker-end="url(#a2)"/>
+
+  <text x="450" y="200" text-anchor="middle" font-size="12" fill="#42505e">Native VS Code undo/redo works because every edit goes through the TextDocument.</text>
+  <text x="450" y="224" text-anchor="middle" font-size="12" fill="#42505e">Untouched regions stay byte-for-byte identical — formatting, comments and indentation are preserved.</text>
+</svg>

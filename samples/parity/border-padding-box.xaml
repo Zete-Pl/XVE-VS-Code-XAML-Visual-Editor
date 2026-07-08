@@ -1,0 +1,12 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Border padding box" Width="420" Height="320">
+	<!-- Model pudełka: WPF DODAJE BorderThickness + Padding do rozmiaru treści. Jeśli web używa
+	     box-sizing:border-box, rozmiar zewnętrzny Bordera się rozjedzie. -->
+	<StackPanel Margin="12">
+		<Border BorderBrush="#FF333333" BorderThickness="4" Padding="16" Background="#FFB0C4DE" HorizontalAlignment="Left">
+			<Border Width="120" Height="60" Background="#FF90EE90" />
+		</Border>
+		<Border BorderBrush="#FF333333" BorderThickness="2,8,2,8" Padding="8,20,8,20" CornerRadius="8" Background="#FFFFE4B5" HorizontalAlignment="Left" Margin="0,12,0,0">
+			<TextBlock Text="Asymetryczny BorderThickness + Padding" />
+		</Border>
+	</StackPanel>
+</Window>

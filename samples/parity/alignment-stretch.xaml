@@ -1,0 +1,14 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Alignment vs explicit size" Width="420" Height="360">
+	<!-- Stretch (domyślny w komórce Grid) vs jawny Width/Height. Web zmienia stretch→center przy
+	     jawnym Width — sprawdzamy pozycję i rozmiar w obu przypadkach. -->
+	<Grid Margin="8">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="*" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="*" />
+		</Grid.RowDefinitions>
+		<Border Grid.Row="0" Background="#FFB0C4DE" />
+		<Border Grid.Row="1" Background="#FF90EE90" Width="120" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center" />
+		<Border Grid.Row="2" Background="#FFFFE4B5" Width="160" HorizontalAlignment="Right" VerticalAlignment="Stretch" />
+	</Grid>
+</Window>

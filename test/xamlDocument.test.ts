@@ -72,6 +72,90 @@ test("ponowna edycja tego samego atrybutu nadpisuje poprzednią", () => {
   assert.equal(doc.getText(), `<Button Width="3"/>`);
 });
 
+test("toHostXaml: x:Class na korzeniu zamienione na x:Uid bez korupcji XML", () => {
+  // regresja: insert(x:Uid)+remove(x:Class) tworzyły nakładające się edycje → `<WindowMainWindow"...`
+  const src = `<Window x:Class="My.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Width="100"><Grid/></Window>`;
+  const out = new XamlDocument(src).toHostXaml();
+  assert.match(out, /^<Window x:Uid="u\d+" xmlns="http/); // poprawny początek, brak korupcji
+  assert.ok(!out.includes("x:Class"), "x:Class powinno zniknąć");
+  assert.ok(out.includes('Width="100"'), "reszta atrybutów nietknięta");
+  assert.ok(/<Grid x:Uid="u\d+"\s*\/>/.test(out), "dzieci też dostają x:Uid");
+});
+
+test("nodeIdAtOffset: zwraca najgłębszy element pod offsetem (kursor → zaznaczenie)", () => {
+  const src = `<Grid>\n  <StackPanel>\n    <Button Content="OK"/>\n  </StackPanel>\n</Grid>`;
+  const doc = new XamlDocument(src);
+  const grid = findByTag(doc, "Grid")!;
+  const stack = findByTag(doc, "StackPanel")!;
+  const btn = findByTag(doc, "Button")!;
+
+  // offset wewnątrz atrybutu Buttona → Button (najgłębszy), nie StackPanel/Grid
+  const inButton = src.indexOf('Content="OK"') + 2;
+  assert.equal(doc.nodeIdAtOffset(inButton), btn.id);
+
+  // offset na otwierającym znaczniku StackPanel → StackPanel
+  const inStack = src.indexOf("<StackPanel") + 2;
+  assert.equal(doc.nodeIdAtOffset(inStack), stack.id);
+
+  // offset na korzeniu → Grid
+  assert.equal(doc.nodeIdAtOffset(src.indexOf("<Grid") + 1), grid.id);
+
+  // poza dokumentem → null
+  assert.equal(doc.nodeIdAtOffset(src.length + 10), null);
+});
+
+test("moveElementReturningId: przenosi do kontenera i zwraca NOWE id zaznaczenia", () => {
+  const src = `<Grid>\n  <Button Content="OK"/>\n  <StackPanel>\n  </StackPanel>\n</Grid>`;
+  const doc = new XamlDocument(src);
+  const btn = findByTag(doc, "Button")!;
+  const stack = findByTag(doc, "StackPanel")!;
+  const newId = doc.moveElementReturningId(btn.id, stack.id, null);
+  assert.ok(newId !== null, "powinno zwrócić nowe id");
+  // nowe id wskazuje przeniesiony Button w zaktualizowanym tekście
+  const after = new XamlDocument(doc.getText());
+  assert.equal(after.getNode(newId!)?.tag, "Button");
+  // Button jest teraz dzieckiem StackPanel
+  const stackAfter = findByTag(after, "StackPanel")!;
+  assert.ok(stackAfter.children.some((c) => c.id === newId), "Button trafił do StackPanel");
+});
+
+test("moveElementReturningId: przy duplikatach zaznacza PRZENIESIONY, nie wcześniejszy bliźniak", () => {
+  // dwa identyczne <Button Content="OK"/>; przenosimy DRUGI do StackPanel
+  const src = `<Grid>\n  <Button Content="OK"/>\n  <Button Content="OK"/>\n  <StackPanel>\n  </StackPanel>\n</Grid>`;
+  // id są pozycyjne i deterministyczne między instancjami tego samego tekstu — policz raz
+  const probe = new XamlDocument(src);
+  const moved = probe.root!.children.filter((c) => c.tag === "Button")[1]; // drugi Button
+  const stackId = findByTag(probe, "StackPanel")!.id;
+
+  // jak XveEditorProvider: kopia jednorazowa służy WYŁĄCZNIE do przewidzenia nowego id
+  const newId = new XamlDocument(src).moveElementReturningId(moved.id, stackId, null);
+  assert.ok(newId !== null, "powinno zwrócić nowe id");
+
+  // realna edycja to osobne moveElement (bez markera) na właściwym dokumencie
+  const real = new XamlDocument(src);
+  assert.equal(real.moveElement(moved.id, stackId, null), true);
+  const after = new XamlDocument(real.getText());
+  const stackAfter = findByTag(after, "StackPanel")!;
+  // KLUCZ: przewidziane id to Button wewnątrz StackPanel, a NIE pierwszy bliźniak w Grid
+  assert.ok(
+    stackAfter.children.some((c) => c.id === newId),
+    "zaznaczony Button musi być tym przeniesionym do StackPanel"
+  );
+  // zapisany tekst nie zawiera markera (kotwica żyje tylko w kopii jednorazowej)
+  assert.ok(!real.getText().includes("_xveSel"), "marker nie może wyciec do zapisanego tekstu");
+});
+
+test("insertChild: rozwija self-closing rodzica (MenuItem-liść → submenu)", () => {
+  const src = `<Menu>\n\t<MenuItem Header="Plik"/>\n\t<MenuItem Header="Widok"/>\n</Menu>`;
+  const doc = new XamlDocument(src);
+  const plik = findByTag(doc, "MenuItem")!;
+  assert.equal(doc.insertChild(plik.id, `<MenuItem Header="Nowy"/>`), true);
+  const out = doc.getText();
+  assert.match(out, /<MenuItem Header="Plik">\s*<MenuItem Header="Nowy"\/>\s*<\/MenuItem>/);
+  // Widok nietknięty
+  assert.ok(out.includes(`<MenuItem Header="Widok"/>`));
+});
+
 test("tree: parsuje atrybuty i dzieci", () => {
   const doc = new XamlDocument(sample);
   const tree = doc.toTree()!;
@@ -79,6 +163,28 @@ test("tree: parsuje atrybuty i dzieci", () => {
   assert.ok(tree.children.length >= 1);
   const grid = tree.children.find((c) => c.tag === "Grid");
   assert.ok(grid);
+});
+
+test("toTree: mieszana treść inline (tekst + <LineBreak/>) zachowuje kolejność w inlines", () => {
+  const doc = new XamlDocument(
+    `<Window xmlns="x"><TextBlock>Tekst<LineBreak />dalej</TextBlock></Window>`
+  );
+  const tree = doc.toTree()!;
+  const tb = tree.children.find((c) => c.tag === "TextBlock")!;
+  assert.ok(tb.inlines, "powinny powstać inlines dla mieszanej treści");
+  assert.equal(tb.inlines!.length, 3);
+  assert.deepEqual(tb.inlines!.map((p) => ("text" in p ? p.text : p.node.tag)), [
+    "Tekst",
+    "LineBreak",
+    "dalej",
+  ]);
+});
+
+test("toTree: czysty tekst (bez elementów inline) nie tworzy inlines", () => {
+  const doc = new XamlDocument(`<Window xmlns="x"><TextBlock>Sam tekst</TextBlock></Window>`);
+  const tb = doc.toTree()!.children.find((c) => c.tag === "TextBlock")!;
+  assert.equal(tb.inlines, undefined);
+  assert.equal(tb.text, "Sam tekst");
 });
 
 // helper

@@ -1,6 +1,11 @@
 node_modules/
 dist/
 out/
+tmp/
 *.vsix
 .DS_Store
 *.log
+
+# źródła grafik (Krita) — do repo trafia tylko wyeksportowany PNG
+*.krz
+*.kra

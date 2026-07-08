@@ -2,6 +2,18 @@
   color-scheme: light dark;
 }
 
+/* Fonty ikon WPF (glify w obszarze PUA). Używamy LOKALNIE zainstalowanych fontów Microsoftu —
+   na Windows (główna platforma) glify się pokażą; gdzie indziej pozostaną puste (font
+   nieredystrybuowalny). Dzięki temu Content="&#xE7A7;" FontFamily="Segoe MDL2 Assets" renderuje ikonę. */
+@font-face {
+  font-family: "Segoe MDL2 Assets";
+  src: local("Segoe MDL2 Assets");
+}
+@font-face {
+  font-family: "Segoe Fluent Icons";
+  src: local("Segoe Fluent Icons"), local("Segoe MDL2 Assets");
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -18,16 +30,17 @@ body {
 }
 
 #layout {
+  --split-w: 5px;
   flex: 1;
   display: grid;
-  grid-template-columns: 240px 1fr 280px;
+  grid-template-columns: var(--tree-w, 240px) var(--split-w) 1fr var(--split-w) var(--props-w, 280px);
   min-height: 0;
 }
 
 #tree-pane,
 #props-pane,
 #preview-pane {
-  overflow: auto;
+  overflow: hidden;
   border-right: 1px solid var(--vscode-panel-border);
   display: flex;
   flex-direction: column;
@@ -35,10 +48,73 @@ body {
 #props-pane {
   border-right: none;
 }
+/* jawne przypisanie kolumn — przy zwinięciu panelu (kolumna 0) pozostałe nie przeskakują */
+#tree-pane {
+  grid-column: 1;
+}
+#splitter-tree {
+  grid-column: 2;
+}
+/* kolumna podglądu = podgląd (#preview-pane) + niezależny dok konsoli pod nim */
+#preview-col {
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--vscode-panel-border);
+}
+#preview-pane {
+  flex: 1;
+  min-height: 0;
+  border-right: none; /* obramowanie przeniesione na #preview-col */
+  position: relative; /* kotwica dla pływającego paska i panelu zoomu */
+}
+#splitter-props {
+  grid-column: 4;
+}
+#props-pane {
+  grid-column: 5;
+}
+
+/* uchwyty zmiany szerokości paneli bocznych */
+.splitter {
+  background: transparent;
+  cursor: col-resize;
+}
+.splitter:hover,
+.splitter.dragging {
+  background: var(--vscode-focusBorder, #0a84ff);
+}
+
+/* zwijanie paneli bocznych: kolumna (i jej splitter) do 0 + ukrycie panelu */
+#layout.tree-collapsed {
+  grid-template-columns: 0 0 1fr var(--split-w) var(--props-w, 280px);
+}
+#layout.props-collapsed {
+  grid-template-columns: var(--tree-w, 240px) var(--split-w) 1fr 0 0;
+}
+#layout.tree-collapsed.props-collapsed {
+  grid-template-columns: 0 0 1fr 0 0;
+}
+#layout.tree-collapsed #tree-pane,
+#layout.tree-collapsed #splitter-tree {
+  display: none;
+}
+#layout.props-collapsed #props-pane,
+#layout.props-collapsed #splitter-props {
+  display: none;
+}
 
 .pane-title {
   position: sticky;
   top: 0;
+  /* nad przewijaną zawartością panelu — bez tego pozycjonowane wiersze drzewa malują się na nagłówku */
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -47,8 +123,313 @@ body {
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
   border-bottom: 1px solid var(--vscode-panel-border);
 }
+/* przycisk zamknięcia panelu (X) w prawym rogu nagłówka */
+.pane-close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  opacity: 0.7;
+}
+.pane-close:hover {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+}
+/* przyciski akcji w nagłówku panelu (Prowadnice / Ustawienia) — przed przyciskiem X */
+.pane-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.pane-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  opacity: 0.7;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+.pane-btn:hover {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+}
+.pane-btn.active {
+  opacity: 1;
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
+}
+/* wiersz dodawania elementu pod nagłówkiem panelu Struktura */
+#tree-add {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+#tree-add .tb-select {
+  flex: 1;
+  min-width: 0;
+}
+/* ---------- pływający, dokowalny pasek narzędzi ---------- */
+#float-toolbar {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  user-select: none;
+  max-width: calc(100% - 12px);
+  flex-wrap: wrap;
+}
+#float-toolbar.vertical {
+  flex-direction: column;
+  max-width: none;
+  max-height: calc(100% - 12px);
+}
+#float-toolbar.dragging {
+  opacity: 0.85;
+  cursor: grabbing;
+}
+.tb-grip {
+  cursor: grab;
+  opacity: 0.6;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+}
+.tb-grip:hover {
+  opacity: 1;
+}
+#float-toolbar.vertical .tb-grip {
+  transform: rotate(90deg);
+}
+/* uchwyt zmiany rozmiaru pływającego paska (prawy-dolny róg) */
+.tb-resize {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.5;
+  cursor: nwse-resize;
+  transform: rotate(45deg);
+  pointer-events: auto;
+}
+.tb-resize:hover {
+  opacity: 1;
+}
+#float-toolbar.resizing {
+  opacity: 0.95;
+}
+
+/* podświetlenie miejsca dokowania paska podczas przeciągania */
+#tb-drop-indicator {
+  position: absolute;
+  z-index: 19;
+  display: none;
+  pointer-events: none;
+  border: 1.5px dashed var(--vscode-focusBorder, #007fd4);
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007fd4) 16%, transparent);
+  border-radius: 6px;
+}
+#tb-drop-indicator.pinned {
+  border-radius: 0;
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007fd4) 22%, transparent);
+}
+
+/* ---------- pływający panel zoomu (prawy-dolny róg podglądu) ---------- */
+#zoom-panel {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0.92;
+}
+#preview-pane.mode-changes #zoom-panel {
+  display: none;
+}
+/* zoom wstawiony do przypiętego paska (pin dół, gdy jest miejsce) — zwykły element flex dosunięty
+   do prawej, bez własnego tła/ramki, by wtopił się w pasek */
+#zoom-panel.in-toolbar {
+  position: static;
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  opacity: 1;
+}
+
+/* ---------- przyciski-ikony (pasek + panele) ---------- */
+.ic-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--vscode-icon-foreground, inherit);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1;
+}
+.ic-btn:hover {
+  background: var(--vscode-toolbar-hoverBackground, #ffffff14);
+}
+.ic-btn.active {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
+}
+.ic-btn .codicon {
+  font-size: 16px;
+}
+/* własna ikona SVG (np. „ręka" narzędzia Pan) — wymiar i kolor jak Codicony */
+.ic-btn .tb-icon {
+  display: inline-flex;
+}
+.ic-btn .tb-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.ic-btn .ic-label {
+  font-size: 11px;
+  padding-right: 2px;
+}
+.tb-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--vscode-panel-border);
+  margin: 2px 2px;
+}
+#float-toolbar.vertical .tb-divider {
+  width: auto;
+  height: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+}
+/* pasek pionowy: etykieta (Design/Changes) POD ikoną, obrócona o 90° (pionowy tekst),
+   by nie poszerzała kolumny ikon */
+#float-toolbar.vertical .ic-btn {
+  flex-direction: column;
+  gap: 1px;
+}
+#float-toolbar.vertical .ic-label {
+  writing-mode: vertical-rl;
+  line-height: 1;
+  padding: 0;
+}
+
+/* ---------- przypięty pasek = stały, obok podglądu (nie nakłada się) ---------- */
+#preview-pane.pinned {
+  display: flex;
+}
+#preview-pane.pin-top,
+#preview-pane.pin-bottom {
+  flex-direction: column;
+}
+#preview-pane.pin-left,
+#preview-pane.pin-right {
+  flex-direction: row;
+}
+#preview-pane.pinned > #preview-viewport,
+#preview-pane.pinned > #changes-view {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  order: 1;
+}
+#float-toolbar.pinned {
+  position: static;
+  transform: none;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+  max-width: none;
+  max-height: none;
+  overflow: auto;
+  background: var(--vscode-sideBar-background, var(--vscode-editorWidget-background));
+}
+#preview-pane.pin-top > #float-toolbar.pinned {
+  order: 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+#preview-pane.pin-bottom > #float-toolbar.pinned {
+  order: 2;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+#preview-pane.pin-left > #float-toolbar.pinned {
+  order: 0;
+  border-right: 1px solid var(--vscode-panel-border);
+}
+#preview-pane.pin-right > #float-toolbar.pinned {
+  order: 2;
+  border-left: 1px solid var(--vscode-panel-border);
+}
+
+/* ---------- menu popup (motyw / silnik) ---------- */
+.ic-menu {
+  position: absolute;
+  z-index: 30;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-menu-foreground, inherit);
+  border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, var(--vscode-panel-border)));
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  min-width: 180px;
+  max-height: 360px;
+  overflow: auto;
+}
+.ic-menu-item {
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ic-menu-item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.ic-menu-item.selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+.ic-menu-label {
+  padding: 4px 10px 2px;
+  font-size: 11px;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 #tree {
+  flex: 1;
+  overflow: auto;
   padding: 4px 0;
 }
 .tkids {
@@ -56,6 +437,7 @@ body {
   border-left: 1px dotted var(--vscode-panel-border);
 }
 .trow {
+  position: relative;
   padding: 2px 10px;
   cursor: pointer;
   white-space: nowrap;
@@ -67,18 +449,32 @@ body {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
 }
+/* wskaźniki upuszczania przy reorderze w drzewie */
+.trow.drop-into {
+  background: var(--vscode-list-dropBackground, #062f4a);
+  outline: 1px solid var(--vscode-focusBorder, #0a84ff);
+  outline-offset: -1px;
+}
+.trow.drop-before::before,
+.trow.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--vscode-focusBorder, #0a84ff);
+  pointer-events: none;
+}
+.trow.drop-before::before {
+  top: -1px;
+}
+.trow.drop-after::after {
+  bottom: -1px;
+}
 
 /* ---------- ramka podglądu z linijkami ---------- */
 #preview-pane {
   overflow: hidden;
-}
-#preview-tools {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--vscode-panel-border);
-  flex-wrap: wrap;
 }
 .tool-group {
   display: flex;
@@ -140,7 +536,6 @@ body {
   right: 0;
   bottom: 0;
   overflow: auto;
-  padding: 24px;
   background:
     repeating-conic-gradient(var(--vscode-editorWidget-background, #80808022) 0% 25%, transparent 0% 50%) 50% / 16px 16px;
 }
@@ -319,48 +714,384 @@ body {
   position: relative;
   display: inline-block;
 }
+/* ---------- paleta motywu (parność z host WPF: classic / Fluent light / dark) ----------
+   Zmienne na #surface; klasa motywu (xve-theme-*) nadawana w renderPreview wg xve.preview.theme.
+   Brak klasy = classic. Nadpisania motywu mają wyższą swoistość (#surface.xve-theme-*). */
+#surface {
+  --xve-win-bg: #ffffff;
+  --xve-win-fg: #000000;
+  --xve-btn-bg: #dddddd;
+  --xve-btn-border: #707070;
+  --xve-btn-fg: #000000;
+  --xve-field-bg: #ffffff;
+  --xve-field-border: #abadb3;
+  --xve-field-fg: #000000;
+  --xve-box-bg: #ffffff;
+  --xve-box-border: #707070;
+  --xve-mark: #000000; /* checkmark / kropka radia */
+  --xve-mark-on-accent: #ffffff;
+  --xve-accent: #06b025; /* classic: zielony pasek postępu */
+  --xve-fill: transparent; /* classic: tor suwaka bez wypełnienia akcentem */
+  --xve-track: #e7eaea; /* classic: jasny rowek toru z ramką #d6d6d6 (spróbkowane z hosta) */
+  --xve-thumb-bg: #f0f0f0;
+  --xve-thumb-border: #707070;
+  --xve-progress-bg: #e6e6e6;
+  --xve-progress-border: #bcbcbc;
+  --xve-radius: 0px;
+  --xve-check-radius: 0px;
+  --xve-thumb-radius: 0px;
+  --xve-ctl-h: 20px; /* Classic: kompaktowe rzędy kontrolek (Fluent nadpisuje na 32) */
+  --xve-check-size: 15px; /* box Z ramką (box-sizing) — WPF classic: kratka ~15px łącznie */
+  --xve-btn-shadow: none;
+  --xve-track-shadow: inset 0 0 0 1px #d6d6d6; /* ramka rowka toru slidera (classic) */
+  --xve-thumb-shadow: none;
+  --xve-box-shadow: none;
+  --xve-track-h: 4px;
+  --xve-btn-px: 1px; /* classic: ciasny przycisk jak WPF „none" (Fluent/98/native nadpisują niżej) */
+}
+/* motywy z wyraźnym chromem przycisku — przywróć wygodniejszy poziomy padding */
+#surface.xve-theme-classic98,
+#surface.xve-theme-light,
+#surface.xve-theme-dark,
+#surface.xve-theme-native {
+  --xve-btn-px: 10px;
+}
+/* Classic '98: brak zaokrągleń — kwadratowe rogi nawet przy jawnym CornerRadius (inline → !important) */
+#surface.xve-theme-classic98 .xve-el {
+  border-radius: 0 !important;
+}
+#surface.xve-theme-classic98 {
+  --xve-win-bg: #d4d0c8;
+  --xve-win-fg: #000000;
+  --xve-btn-bg: #d4d0c8;
+  --xve-btn-border: #707070;
+  --xve-btn-fg: #000000;
+  --xve-field-bg: #ffffff;
+  --xve-field-border: #808080;
+  --xve-field-fg: #000000;
+  --xve-box-bg: #ffffff;
+  --xve-box-border: #808080;
+  --xve-mark: #000000;
+  --xve-mark-on-accent: #ffffff;
+  --xve-accent: #000080;
+  --xve-fill: transparent;
+  --xve-track: #d4d0c8;
+  --xve-thumb-bg: #d4d0c8;
+  --xve-thumb-border: #707070;
+  --xve-progress-bg: #c0c0c0;
+  --xve-progress-border: #808080;
+  --xve-radius: 0px;
+  --xve-check-radius: 0px;
+  --xve-thumb-radius: 0px;
+  --xve-ctl-h: 20px; /* Classic '98: kompaktowe rzędy kontrolek */
+  --xve-cal-head-bg: #d4d0c8; /* pas nagłówka kalendarza w szarości Win98, nie Aero */
+  --xve-check-size: 13px;
+  --xve-btn-shadow: inset 1px 1px #ffffff, inset -1px -1px #808080;
+  --xve-track-shadow: inset 1px 1px #808080, inset -1px -1px #ffffff;
+  --xve-thumb-shadow: inset 1px 1px #ffffff, inset -1px -1px #808080;
+  --xve-box-shadow: inset 1px 1px #808080, inset -1px -1px #ffffff;
+  --xve-track-h: 4px;
+}
+#surface.xve-theme-light {
+  --xve-win-bg: #fafafa; /* tło okna Fluent light (spróbkowane z hosta) */
+  --xve-win-fg: #1b1b1b;
+  --xve-btn-bg: #fbfbfb;
+  --xve-btn-border: #d6d6d6;
+  --xve-btn-fg: #1b1b1b;
+  --xve-field-bg: #ffffff;
+  --xve-field-border: #cccccc;
+  --xve-field-fg: #1b1b1b;
+  --xve-box-bg: transparent;
+  --xve-box-border: #8a8a8a;
+  --xve-mark: #1b1b1b;
+  --xve-mark-on-accent: #ffffff;
+  --xve-accent: #0067c0;
+  --xve-fill: #0067c0;
+  --xve-track: #868686;
+  --xve-thumb-bg: #0067c0;
+  --xve-thumb-border: #ffffff;
+  --xve-progress-bg: #8a8a8a; /* tor ProgressBara Fluent = szary #8a8a8a (spróbkowane z hosta) */
+  --xve-progress-border: transparent;
+  --xve-radius: 4px;
+  --xve-check-radius: 4px;
+  --xve-thumb-radius: 50%;
+  --xve-check-size: 20px;
+  --xve-ctl-h: 32px; /* Fluent: roomy control rows (combo/StatusBar/toolbar skalują się z motywem) */
+  --xve-btn-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 0 rgba(0, 0, 0, 0.04) inset;
+  --xve-thumb-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+#surface.xve-theme-light .xve-check,
+#surface.xve-theme-light .xve-slider,
+#surface.xve-theme-light .xve-button,
+#surface.xve-theme-light .xve-textbox {
+  --xve-ctl-h: 32px;
+}
+/* Fluent: zakładki 32px wysokości (WinUI), szerszy padding nagłówków menu, wyższy ToolBar (49px),
+   TabControl bez wewnętrznego paddingu treści */
+#surface.xve-theme-light,
+#surface.xve-theme-dark {
+  --xve-font-size: 14px; /* Fluent „Body" 14px (ContentControlThemeFontSize) — patrz .xve-el */
+  --xve-tab-py: 7.5px;
+  --xve-tab-px: 6px;
+  --xve-menuitem-px: 15px;
+  --xve-toolbar-minh: 51.6px; /* Fluent 14px content → pasek ~51.6px (host); menu/pozycje stretch do tego */
+  --xve-tabbody-pad: 0px;
+  --xve-track-shadow: none; /* ramka rowka jest tylko w classic */
+}
+#surface.xve-theme-native {
+  --xve-track-shadow: none;
+}
+/* Fluent: StatusBar zostaje przy 12px, choć reszta treści (w tym ToolBar/Menu/zakładki) dziedziczy
+   14px z okna. Zmierzone hostem: pasek stanu resetuje FontSize do 12, paski narzędzi i menu nie. */
+#surface.xve-theme-light .xve-statusbar,
+#surface.xve-theme-dark .xve-statusbar {
+  --xve-font-size: 12px;
+  font-size: 12px;
+}
+/* Fluent: ToolBar chowa przycisk overflow (zostaje 2px krawędzi), top-level MenuItem jest wysoki
+   (~46px — Menu z VerticalAlignment=Center i tak wypełnia pasek jak w hoście) */
+#surface.xve-theme-light .xve-toolbar-overflow,
+#surface.xve-theme-dark .xve-toolbar-overflow {
+  width: 2px;
+}
+#surface.xve-theme-light .xve-toolbar-overflow::after,
+#surface.xve-theme-dark .xve-toolbar-overflow::after {
+  content: none;
+}
+#surface.xve-theme-light .xve-menuitem,
+#surface.xve-theme-dark .xve-menuitem {
+  min-height: 46px;
+}
+/* Fluent: Menu w ToolBarze rozciąga się na wysokość paska (nagłówki podświetlane na całej wysokości) */
+#surface.xve-theme-light .xve-toolbar > .xve-menu,
+#surface.xve-theme-dark .xve-toolbar > .xve-menu {
+  align-self: stretch;
+}
+/* Fluent: pasek zakładek bez wewnętrznego paddingu (zakładki od krawędzi TabControl) */
+#surface.xve-theme-light .xve-tab-strip,
+#surface.xve-theme-dark .xve-tab-strip {
+  padding: 0;
+}
+/* Fluent: StatusBar ma 1px obwódki paddingu, separator to 13px pas z linią pośrodku i odstępem 6px,
+   Slider jest niższy (30px) */
+#surface.xve-theme-light .xve-statusbar,
+#surface.xve-theme-dark .xve-statusbar {
+  /* 1px chromu wokół pozycji daje RAMKA szablonu (nie padding — XAML-owe Padding="0" by ją zbiło) */
+  border: 1px solid transparent;
+  /* Fluent StatusBar ma minimum 40px wysokości (pozycje rozciągają się do 38) */
+  min-height: 40px;
+}
+#surface.xve-theme-light .xve-statusbaritem,
+#surface.xve-theme-dark .xve-statusbaritem {
+  padding: 3px 4px;
+}
+/* Fluent: ComboBox w StatusBarze niższy niż domyślne 32 kontrolki Fluent (WPF układa go na 32) */
+#surface.xve-theme-light .xve-statusbar .xve-combobox,
+#surface.xve-theme-dark .xve-statusbar .xve-combobox {
+  min-height: 32px;
+}
+#surface.xve-theme-light .xve-statusbar .xve-separator-v,
+#surface.xve-theme-dark .xve-statusbar .xve-separator-v {
+  min-width: 13px;
+  max-width: 13px;
+  margin: 0 6px;
+  background: linear-gradient(
+    to right,
+    transparent calc(50% - 0.5px),
+    color-mix(in srgb, currentColor 30%, transparent) calc(50% - 0.5px),
+    color-mix(in srgb, currentColor 30%, transparent) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+}
+#surface.xve-theme-light .xve-statusbar .xve-slider,
+#surface.xve-theme-dark .xve-statusbar .xve-slider {
+  min-height: 30px; /* w StatusBarze slider jest niższy; standalone zostaje 32 (--xve-ctl-h) */
+}
+/* Fluent: CheckBox/RadioButton mają MinWidth=120 (styl WinUI), Label nie ma poziomego paddingu
+   (2px pion — WPF Fluent redefiniuje domyślny Padding=5 z classic), TextBox ma MinHeight=32,
+   które w WPF KLAMRUJE nawet jawne mniejsze Height (stąd !important nad inline'owym min-height:0) */
+#surface.xve-theme-light .xve-check,
+#surface.xve-theme-dark .xve-check {
+  min-width: 120px;
+}
+#surface.xve-theme-light .xve-label,
+#surface.xve-theme-dark .xve-label {
+  padding: 2px 0;
+}
+#surface.xve-theme-light .xve-textbox,
+#surface.xve-theme-dark .xve-textbox {
+  min-height: 32px !important;
+}
+/* Fluent: poziomy Separator to linia 1px z marginesem 5px góra/dół (łącznie 11px) */
+#surface.xve-theme-light .xve-separator:not(.xve-separator-v),
+#surface.xve-theme-dark .xve-separator:not(.xve-separator-v) {
+  min-height: 11px;
+  background: linear-gradient(
+    to bottom,
+    transparent calc(50% - 0.5px),
+    color-mix(in srgb, currentColor 30%, transparent) calc(50% - 0.5px),
+    color-mix(in srgb, currentColor 30%, transparent) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+}
+#surface.xve-theme-dark {
+  --xve-win-bg: #202020;
+  --xve-win-fg: #ffffff;
+  --xve-btn-bg: #2d2d2d;
+  --xve-btn-border: #3d3d3d;
+  --xve-btn-fg: #ffffff;
+  --xve-field-bg: #2b2b2b;
+  --xve-field-border: #3d3d3d;
+  --xve-field-fg: #ffffff;
+  --xve-box-bg: transparent;
+  --xve-box-border: #9a9a9a;
+  --xve-mark: #ffffff;
+  --xve-mark-on-accent: #000000;
+  --xve-accent: #60cdff;
+  --xve-fill: #60cdff;
+  --xve-track: #9a9a9a;
+  --xve-thumb-bg: #60cdff;
+  --xve-thumb-border: #2b2b2b;
+  --xve-progress-bg: #444444;
+  --xve-progress-border: transparent;
+  --xve-radius: 4px;
+  --xve-check-radius: 4px;
+  --xve-thumb-radius: 50%;
+  --xve-ctl-h: 32px; /* Fluent: roomy control rows (combo/StatusBar/toolbar skalują się z motywem) */
+  --xve-check-size: 20px;
+  --xve-btn-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  --xve-thumb-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+#surface.xve-theme-dark .xve-check,
+#surface.xve-theme-dark .xve-slider,
+#surface.xve-theme-dark .xve-button,
+#surface.xve-theme-dark .xve-textbox {
+  --xve-ctl-h: 32px;
+}
+/* natywny wygląd web (GTK/Adwaita — jak na Linux), bez naśladowania Windows */
+#surface.xve-theme-native {
+  --xve-win-bg: #fafafa;
+  --xve-win-fg: #2e3436;
+  --xve-btn-bg: #ffffff;
+  --xve-btn-border: #c9c4be;
+  --xve-btn-fg: #2e3436;
+  --xve-field-bg: #ffffff;
+  --xve-field-border: #c9c4be;
+  --xve-field-fg: #2e3436;
+  --xve-box-bg: #ffffff;
+  --xve-box-border: #b6b0a9;
+  --xve-mark: #2e3436;
+  --xve-mark-on-accent: #ffffff;
+  --xve-accent: #3584e4;
+  --xve-fill: #3584e4;
+  --xve-track: #d3cfca;
+  --xve-thumb-bg: #ffffff;
+  --xve-thumb-border: #b0aaa3;
+  --xve-progress-bg: #d3cfca;
+  --xve-progress-border: transparent;
+  --xve-radius: 6px;
+  --xve-check-radius: 5px;
+  --xve-thumb-radius: 50%;
+  --xve-ctl-h: 26px;
+  --xve-check-size: 18px;
+  --xve-btn-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+#surface.xve-theme-native .xve-el {
+  font-family: "Cantarell", "Ubuntu", "Noto Sans", "DejaVu Sans", system-ui, sans-serif;
+}
+
 .xve-window {
+  background: var(--xve-win-bg);
+  color: var(--xve-win-fg);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 .xve-el {
   box-sizing: border-box;
-  font-family: "Segoe UI", var(--vscode-font-family);
-  font-size: 12px;
-  line-height: 1.3;
+  /* WPF jako domyślną czcionkę UI używa „Segoe UI" (nie wariantu zmiennego) — preferujemy ją pierwszą,
+     by metryki tekstu (szerokość) zgadzały się z hostem WPF; wariant zmienny jako zapas na Win11. */
+  font-family: "Segoe UI", "Segoe UI Variable Text", var(--vscode-font-family), sans-serif;
+  font-size: var(--xve-font-size, 12px);
+  line-height: 1.333333;
+  flex-shrink: 0;
+  /* WPF renderuje znaki emoji-podobne (✋⛶⊞) monochromatycznie (glify tekstowe Segoe UI);
+     bez tego Chromium podstawia kolorowe emoji i wygląd ucieka od hosta */
+  font-variant-emoji: text;
 }
+.xve-disabled {
+  opacity: 0.5 !important;
+  /* tylko wyszarzenie — w podglądzie projektowym element z IsEnabled=false musi być nadal
+     zaznaczalny (jak w designerze WPF); blokowanie kliknięć uniemożliwiało jego wybór */
+}
+/* Visibility="Collapsed": !important, bo gałęzie kontenerów ustawiają inline display:flex/grid */
+.xve-collapsed {
+  display: none !important;
+}
+/* Fluent (Windows 11): domyślny FontSize treści to 14px (ContentControlThemeFontSize / „Body" 14/20 epx
+   w typografii WinUI), dziedziczony przez motywowane okno na całe drzewo. Classic/98 zostają przy 12px.
+   Ustawiamy przez zmienną `--xve-font-size` na #surface (patrz motywy light/dark) — .xve-el ją czyta,
+   a chrom z jawnym `font-size` (statusbar/menu itd.) i tak wygrywa kolejnością. */
 .xve-text {
   white-space: pre;
+}
+/* Label: domyślny Padding=5 jak w WPF (jawny Padding z XAML nadpisuje inline'em) */
+.xve-label {
+  padding: 5px;
 }
 .xve-control {
   display: inline-flex;
   align-items: center;
   box-sizing: border-box;
+  min-height: var(--xve-ctl-h, 0px); /* większe rzędy w Fluent/native — odstępy jak w WPF */
 }
+/* metryki pasków (ToolBar/StatusBar) — patrz sekcja niżej przy .xve-toolbar/.xve-statusbar */
 .xve-button {
   justify-content: center;
-  background: linear-gradient(#fdfdfd, #e7e7e7);
-  border: 1px solid #adadad;
-  border-radius: 2px;
-  color: #000;
-  padding: 0 8px;
-  min-height: 23px;
+  background: var(--xve-btn-bg);
+  border: 1px solid var(--xve-btn-border);
+  border-radius: var(--xve-radius);
+  color: var(--xve-btn-fg);
+  /* classic (parność z host WPF „none") ma ciasny przycisk; Fluent/98/native nadpisują --xve-btn-px */
+  padding: 0 var(--xve-btn-px, 10px);
+  min-height: var(--xve-ctl-h, 23px);
+  box-shadow: var(--xve-btn-shadow, none);
+}
+#surface.xve-theme-light .xve-button {
+  border-bottom-color: #cccccc;
+}
+#surface.xve-theme-dark .xve-button {
+  border-bottom-color: #333333;
 }
 .xve-textbox {
-  background: #fff;
-  border: 1px solid #abadb3;
-  color: #000;
+  background: var(--xve-field-bg);
+  border: 1px solid var(--xve-field-border);
+  color: var(--xve-field-fg);
   padding: 2px 4px;
-  align-items: flex-start;
+  align-items: center;
+  border-radius: var(--xve-radius);
+  min-height: var(--xve-ctl-h, 23px);
+}
+/* Fluent: TextBox ma ciemniejszą dolną krawędź i subtelną na pozostałych */
+#surface.xve-theme-light .xve-textbox {
+  border-color: rgba(0, 0, 0, 0.05);
+  border-bottom-color: #8a8a8a;
+}
+#surface.xve-theme-dark .xve-textbox {
+  border-color: rgba(255, 255, 255, 0.05);
+  border-bottom-color: #9a9a9a;
 }
 .xve-check {
-  gap: 6px;
+  gap: 8px;
   color: inherit;
+  min-height: var(--xve-ctl-h, 16px);
 }
 .xve-checkbox {
-  width: 13px;
-  height: 13px;
-  border: 1px solid #707070;
-  background: #fff;
+  width: var(--xve-check-size, 16px);
+  height: var(--xve-check-size, 16px);
+  box-sizing: border-box; /* rozmiar Z ramką — WPF: box 13px (classic) / 20px (Fluent) łącznie */
+  border: 1px solid var(--xve-box-border);
+  background: var(--xve-box-bg);
+  border-radius: var(--xve-check-radius);
+  box-shadow: var(--xve-box-shadow, none);
   display: inline-block;
   flex: none;
   position: relative;
@@ -368,56 +1099,110 @@ body {
 .xve-checkbox.radio {
   border-radius: 50%;
 }
+/* znacznik proporcjonalny do rozmiaru pudełka (skaluje się: classic 16 / Fluent 20 / native 18) */
 .xve-checkbox.checked::after {
   content: "";
   position: absolute;
-  left: 3px;
-  top: 0px;
-  width: 4px;
-  height: 8px;
-  border: solid #000;
+  left: 50%;
+  top: 46%;
+  width: 28%;
+  height: 56%;
+  border: solid var(--xve-mark);
   border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 .xve-checkbox.radio.checked::after {
   content: "";
-  left: 3px;
-  top: 3px;
-  width: 5px;
-  height: 5px;
+  left: 50%;
+  top: 50%;
+  width: 42%;
+  height: 42%;
   border: none;
   border-radius: 50%;
-  background: #000;
-  transform: none;
+  background: var(--xve-mark);
+  transform: translate(-50%, -50%);
+}
+/* Fluent/native: zaznaczony checkbox/radio wypełniony akcentem, znacznik w kolorze kontrastu */
+#surface.xve-theme-light .xve-checkbox.checked,
+#surface.xve-theme-dark .xve-checkbox.checked,
+#surface.xve-theme-native .xve-checkbox.checked {
+  background: var(--xve-accent);
+  border-color: var(--xve-accent);
+}
+#surface.xve-theme-light .xve-checkbox.checked::after,
+#surface.xve-theme-dark .xve-checkbox.checked::after,
+#surface.xve-theme-native .xve-checkbox.checked::after {
+  border-color: var(--xve-mark-on-accent);
+}
+/* Fluent: cieńszy haczyk */
+#surface.xve-theme-light .xve-checkbox:not(.radio).checked::after,
+#surface.xve-theme-dark .xve-checkbox:not(.radio).checked::after {
+  border-width: 0 1.5px 1.5px 0;
+}
+#surface.xve-theme-light .xve-checkbox.radio.checked::after,
+#surface.xve-theme-dark .xve-checkbox.radio.checked::after,
+#surface.xve-theme-native .xve-checkbox.radio.checked::after {
+  background: var(--xve-mark-on-accent);
 }
 .xve-slider {
   align-items: center;
+  min-height: var(--xve-ctl-h, 22px);
 }
 .xve-slider-track {
   position: relative;
   width: 100%;
-  height: 4px;
-  background: #c4c4c4;
+  height: var(--xve-track-h, 4px);
+  background: var(--xve-track);
+  border-radius: 2px;
+  box-shadow: var(--xve-track-shadow, none);
+}
+/* wypełnienie toru po lewej (akcent) — jak w WPF Fluent; classic = transparent */
+.xve-slider-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--xve-fill);
   border-radius: 2px;
 }
 .xve-slider-thumb {
   position: absolute;
   top: 50%;
-  width: 10px;
-  height: 18px;
-  background: #f0f0f0;
-  border: 1px solid #888;
-  border-radius: 2px;
+  z-index: 1;
+  width: 11px;
+  height: 20px;
+  background: var(--xve-thumb-bg);
+  border: 1px solid var(--xve-thumb-border);
+  border-radius: var(--xve-thumb-radius);
+  box-shadow: var(--xve-thumb-shadow, none);
   transform: translate(-50%, -50%);
 }
+/* Fluent/native/flat classic: in flat classic it's 10x18 */
+#surface:not(.xve-theme-classic98) .xve-slider-thumb {
+  width: 10px;
+  height: 18px;
+}
+/* Fluent/native: okrągły kciuk suwaka (ring) */
+#surface.xve-theme-light .xve-slider-thumb,
+#surface.xve-theme-dark .xve-slider-thumb {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+#surface.xve-theme-native .xve-slider-thumb {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
 .xve-progress {
-  background: #e6e6e6;
-  border: 1px solid #bcbcbc;
+  background: var(--xve-progress-bg);
+  border: 1px solid var(--xve-progress-border);
   overflow: hidden;
+  border-radius: var(--xve-radius);
 }
 .xve-progress-fill {
   height: 100%;
-  background: #06b025;
+  background: var(--xve-accent);
 }
 .xve-shape {
   box-sizing: border-box;
@@ -434,6 +1219,296 @@ body {
   min-height: 16px;
 }
 
+/* ComboBox + auto-podgląd listy (funkcja 2) */
+.xve-combobox {
+  background: var(--xve-field-bg);
+  border: 1px solid var(--xve-field-border);
+  color: var(--xve-field-fg);
+  border-radius: var(--xve-radius);
+  align-items: stretch;
+  min-height: var(--xve-ctl-h, 23px);
+}
+.xve-combobox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 6px;
+  width: 100%;
+}
+.xve-combobox-arrow {
+  opacity: 0.7;
+  font-size: 10px;
+}
+/* Classic: intrinsic metryki kontrolek dopasowane do hosta WPF (motyw „none", parity tester):
+   TextBox 18px (border 2 + linia 16, bez pionowego paddingu), ComboBox 22px,
+   CheckBox/RadioButton = wysokość tekstu (~15px, WPF daje 15.0–15.1). Fluent/98/native bez zmian. */
+#surface.xve-theme-classic .xve-textbox {
+  padding-top: 0;
+  padding-bottom: 0;
+  min-height: 18px;
+}
+#surface.xve-theme-classic .xve-combobox {
+  min-height: 22px;
+}
+#surface.xve-theme-classic .xve-check {
+  min-height: 0;
+  line-height: 1.25;
+  gap: 5px; /* odstęp box↔tekst jak BulletDecorator WPF classic (nie 8px z Fluent) */
+}
+/* Classic: slimniejsze kontrolki w chromie okna (metryki hosta WPF) */
+#surface.xve-theme-classic .xve-toolbar .xve-combobox {
+  min-height: 20px; /* ToolBar.ComboBoxStyleKey: 19.96 zamiast zwykłych 22 */
+  margin: 0 1px; /* 1px odstęp wokół combo w pasku (zmierzone hostem) */
+}
+#surface.xve-theme-classic .xve-slider {
+  min-height: 18px; /* poziomy Slider WPF: 18, nie 20 z --xve-ctl-h */
+}
+/* popup listy/menu (rozwinięty podgląd) */
+.xve-popup {
+  position: absolute;
+  z-index: 30;
+  min-width: 100%;
+  background: var(--xve-win-bg, #fff);
+  color: var(--xve-win-fg, #000);
+  border: 1px solid var(--xve-btn-border, #aaa);
+  border-radius: var(--xve-radius, 2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  padding: 2px 0;
+}
+.xve-combo-popup {
+  top: 100%;
+  left: 0;
+  /* lista rozwijana = białe tło pola (jak ListBox), nie szare jak menu (Classic '98: menu szare, listy białe) */
+  background: var(--xve-field-bg);
+}
+.xve-popup-item {
+  padding: 3px 10px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.xve-menuitem-head {
+  /* poziomy padding jak nagłówek top-level MenuItem WPF (classic 7.5px/stronę, Fluent 15px) */
+  padding: 3px var(--xve-menuitem-px, 7.5px);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  box-sizing: border-box;
+}
+/* bieżąca wartość ComboBox (IsSelected/SelectedIndex) — Classic/natywny: szare tło prostokątem
+   (zaznaczenie w edytorze przykrywa ramką #sel-overlay) */
+.xve-popup-item.xve-item-current {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+/* Classic '98: bieżąca wartość jak w Win98 — granatowe tło, biały tekst (parytet z hostem WPF) */
+#surface.xve-theme-classic98 .xve-popup-item.xve-item-current {
+  background: #000080;
+  color: #ffffff;
+}
+/* Fluent (light/dark): niebieska kreska po lewej zamiast pełnego tła (jak WinUI) */
+#surface.xve-theme-light .xve-popup-item.xve-item-current,
+#surface.xve-theme-dark .xve-popup-item.xve-item-current {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  border-radius: 4px;
+  position: relative;
+}
+#surface.xve-theme-light .xve-popup-item.xve-item-current::before,
+#surface.xve-theme-dark .xve-popup-item.xve-item-current::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 55%;
+  border-radius: 2px;
+  background: var(--vscode-focusBorder, #0a64c2);
+}
+/* zaznaczenie w edytorze pokazuje ramka #sel-overlay (jak w aplikacji/host) — tu tylko subtelne,
+   półprzezroczyste tło; NIE zmieniamy koloru tekstu (jasny fg był niewidoczny na jasnych motywach) */
+.xve-popup-item.xve-item-selected,
+.xve-menuitem.xve-item-selected > .xve-menuitem-head {
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 22%, transparent);
+}
+/* Menu (pasek) */
+.xve-menu {
+  gap: 0;
+  align-items: stretch;
+}
+.xve-menuitem {
+  position: relative;
+  align-items: center;
+}
+/* wiersze menu w popupie kaskady: ikona(wcięcie) | nagłówek | gest/▸ */
+.xve-menu-popup {
+  display: block;
+  min-width: 180px;
+}
+.xve-menu-row {
+  display: flex;
+  align-items: center;
+  padding: 3px 12px 3px 6px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.xve-menu-check {
+  flex: 0 0 22px; /* lewa kolumna ikony/✓ (przestrzeń jak klasyczne menu WPF) */
+  text-align: center;
+}
+.xve-menu-head {
+  flex: 1 1 auto;
+}
+.xve-menu-gest {
+  flex: 0 0 auto;
+  margin-left: 24px;
+  opacity: 0.6;
+  font-size: 11px;
+}
+/* Fluent (light/dark): menu dopasowane do treści (bez sztywnego minimum) i z luźniejszymi odstępami
+   pionowymi między pozycjami — parzystość z realnym WPF. */
+#surface.xve-theme-light .xve-menu-popup,
+#surface.xve-theme-dark .xve-menu-popup {
+  min-width: 0;
+}
+#surface.xve-theme-light .xve-menu-row,
+#surface.xve-theme-dark .xve-menu-row {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+#surface.xve-theme-light .xve-menu-sep,
+#surface.xve-theme-dark .xve-menu-sep {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+/* Fluent BEZ pozycji IsCheckable → zwinięta lewa kolumna (węższe menu jak lista ComboBox);
+   panele z checkbox zostają szersze (rezerwa na ✓ po lewej). */
+#surface.xve-theme-light .xve-menu-popup:not(.has-checkable) .xve-menu-check,
+#surface.xve-theme-dark .xve-menu-popup:not(.has-checkable) .xve-menu-check {
+  flex-basis: 0;
+}
+.xve-menu-row.xve-item-open {
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 20%, transparent);
+}
+.xve-menu-row.xve-item-selected {
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 22%, transparent);
+}
+/* separator między pozycjami menu — klikalny pasek (linia w środku), selektowalny/edytowalny */
+.xve-menu-sep {
+  padding: 4px 8px 4px 28px;
+}
+.xve-menu-sep-line {
+  height: 1px;
+  background: var(--xve-btn-border, #c8c8c8);
+}
+.xve-menu-sep.xve-item-selected {
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 22%, transparent);
+}
+
+/* TabControl: pasek nagłówków + treść aktywnej zakładki (przełączana zaznaczeniem w auto-podglądzie) */
+.xve-tabcontrol {
+  display: flex; /* nadpisuje inline-flex z .xve-control */
+  flex-direction: column;
+  align-items: stretch; /* nadpisuje center z .xve-control — pasek i treść na pełną szerokość */
+  background: var(--xve-win-bg);
+  border: 1px solid var(--xve-field-border);
+  border-radius: var(--xve-radius);
+  color: var(--xve-win-fg);
+}
+.xve-tab-strip {
+  display: flex;
+  flex-direction: row;
+  flex: 0 0 auto;
+  gap: var(--xve-tab-gap, 0px);
+  padding: 1px 2px 0 1px;
+  border-bottom: 1px solid var(--xve-field-border);
+}
+/* metryki jak TabItem WPF: classic 19.96 wys. („tekst+3px"), Fluent nadpisuje zmiennymi na 32 */
+.xve-tab {
+  padding: var(--xve-tab-py, 1.5px) var(--xve-tab-px, 5px);
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-top-left-radius: var(--xve-radius);
+  border-top-right-radius: var(--xve-radius);
+}
+.xve-tab-active {
+  background: var(--xve-field-bg);
+  border-color: var(--xve-field-border);
+}
+/* Fluent: zakładka ma STAŁĄ wysokość 32px (jak host — WinUI TabItem), więc treść 14px nie rozpycha
+   paska zakładek (inaczej pasek rósłby o 2.7px i przesuwał całą treść niżej). Tekst wyśrodkowany. */
+#surface.xve-theme-light .xve-tab,
+#surface.xve-theme-dark .xve-tab {
+  height: 32px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+/* Classic: zaznaczona zakładka ROŚNIE (WPF: +4 szer., +2 wys., wystaje 2px ponad rząd);
+   ujemne marginesy utrzymują sąsiadów na miejscu mimo większego pudełka */
+#surface.xve-theme-classic .xve-tab-active {
+  margin: -2px -2px 0 -2px;
+  padding: calc(var(--xve-tab-py, 1.5px) + 2px) calc(var(--xve-tab-px, 5px) + 2px) var(--xve-tab-py, 1.5px);
+  position: relative;
+  z-index: 1;
+}
+.xve-tab-body {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  /* WPF TabControl: Padding=2 wokół treści (Fluent zeruje zmienną). MARGIN, nie padding —
+     dzieci zakładki pozycjonują się absolutnie (inset liczony od pudełka paddingu). */
+  margin: var(--xve-tabbody-pad, 2px);
+}
+.xve-tab.xve-item-selected {
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 22%, transparent);
+}
+/* Fluent (light/dark): aktywna zakładka bez „pudełka", z akcentową kreską pod spodem (jak WinUI) */
+#surface.xve-theme-light .xve-tab-active,
+#surface.xve-theme-dark .xve-tab-active {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border-color: transparent;
+  position: relative;
+}
+#surface.xve-theme-light .xve-tab-active::after,
+#surface.xve-theme-dark .xve-tab-active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--vscode-focusBorder, #0a64c2);
+}
+
+/* pasek przewijania ScrollViewer + popupów listy/menu — standardowe scrollbar-color wymusza barwy
+   niezależnie od color-scheme (ciemny pasek UA). Bez ::-webkit-scrollbar, by nie wejść w tryb legacy. */
+.xve-scrollviewer,
+.xve-popup {
+  color-scheme: light;
+  scrollbar-width: thin;
+  scrollbar-color: var(--xve-sb-thumb, #c8c8c8) var(--xve-sb-track, #f0f0f0);
+}
+#surface.xve-theme-dark .xve-scrollviewer,
+#surface.xve-theme-dark .xve-popup {
+  color-scheme: dark;
+}
+#surface.xve-theme-dark {
+  --xve-sb-track: #2b2b2b;
+  --xve-sb-thumb: #5a5a5a;
+  --xve-sb-thumb-hover: #777777;
+}
+#surface.xve-theme-light,
+#surface.xve-theme-native {
+  --xve-sb-track: #f0f0f0;
+  --xve-sb-thumb: #cdcdcd;
+  --xve-sb-thumb-hover: #a6a6a6;
+}
+
 /* nakładka zaznaczenia */
 #sel-overlay {
   position: absolute;
@@ -442,6 +1517,35 @@ body {
   border: 1.5px solid var(--vscode-focusBorder, #0a84ff);
   background: color-mix(in srgb, var(--vscode-focusBorder, #0a84ff) 12%, transparent);
   z-index: 10;
+}
+/* element zaznaczony, ale niewidoczny (przycięty przez kontener): ramka przerywana pokazuje, gdzie jest;
+   ciało ramki przejmuje kliknięcia (jedyny sposób, by go chwycić — na powierzchni nic nie narysowano). */
+#sel-overlay.clipped {
+  pointer-events: auto;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--vscode-focusBorder, #0a84ff) 7%, transparent);
+  cursor: move;
+}
+#sel-overlay.clipped.no-handles {
+  cursor: grab;
+}
+/* wskaźnik upuszczania narzędzia Reorder (port TreeDropAdorner) */
+#reorder-indicator {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+  z-index: 11;
+}
+#reorder-indicator.ind-before,
+#reorder-indicator.ind-after {
+  background: var(--vscode-focusBorder, #0a84ff);
+  border-radius: 1px;
+  box-shadow: 0 0 2px var(--vscode-focusBorder, #0a84ff);
+}
+#reorder-indicator.ind-into {
+  border: 2px solid var(--vscode-focusBorder, #0a84ff);
+  background: color-mix(in srgb, var(--vscode-focusBorder, #0a84ff) 14%, transparent);
+  border-radius: 2px;
 }
 #surface.png {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
@@ -471,6 +1575,8 @@ body {
 .h-s  { left: 50%; bottom: -5px; transform: translateX(-50%); cursor: ns-resize; }
 .h-sw { left: -5px; bottom: -5px; cursor: nesw-resize; }
 .h-w  { left: -5px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+/* Pan / Reorder: zaznaczony element pokazuje samą ramkę, bez uchwytów resize */
+#sel-overlay.no-handles .sel-handle { display: none; }
 
 /* pasek narzędzi */
 #toolbar {
@@ -502,6 +1608,8 @@ body {
 }
 
 #props {
+  flex: 1;
+  overflow: auto;
   padding: 6px 8px;
 }
 .field {
@@ -556,24 +1664,460 @@ body {
   width: 100%;
   box-sizing: border-box;
 }
+.field-brush-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .field-brush {
   display: flex;
   gap: 4px;
   align-items: center;
 }
+.field-image {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.field-image .field-input {
+  flex: 1;
+  min-width: 0;
+}
 .field-swatch {
+  position: relative;
   width: 24px;
   height: 22px;
   padding: 0;
   border: 1px solid var(--vscode-input-border, #0003);
-  background: transparent;
   flex: none;
   cursor: pointer;
+  overflow: hidden;
+  /* szachownica pod kolorem — widoczna przezroczystość */
+  background-image:
+    linear-gradient(45deg, #0000004d 25%, transparent 25%, transparent 75%, #0000004d 75%),
+    linear-gradient(45deg, #0000004d 25%, transparent 25%, transparent 75%, #0000004d 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+  background-color: #fff;
+}
+.field-swatch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--sw, transparent);
+}
+
+/* ---------- niestandardowy próbnik koloru (z alfą) ---------- */
+.color-picker {
+  position: fixed;
+  z-index: 1000;
+  width: 240px;
+  box-sizing: border-box;
+  padding: 10px;
+  background: var(--vscode-editorWidget-background, var(--vscode-menu-background, #2b2b2b));
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-menu-border, #0006));
+  border-radius: 6px;
+  box-shadow: 0 4px 16px #0008;
+  user-select: none;
+}
+.cp-sv {
+  position: relative;
+  width: 100%;
+  height: 140px;
+  border-radius: 4px;
+  cursor: crosshair;
+  touch-action: none;
+}
+.cp-thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #0008, inset 0 0 0 1px #0008;
+  pointer-events: none;
+}
+.cp-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+.cp-preview {
+  position: relative;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #0006;
+  overflow: hidden;
+  background-image:
+    linear-gradient(45deg, #0000004d 25%, transparent 25%, transparent 75%, #0000004d 75%),
+    linear-gradient(45deg, #0000004d 25%, transparent 25%, transparent 75%, #0000004d 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+  background-color: #fff;
+}
+.cp-preview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--sw, transparent);
+}
+.cp-sliders {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cp-hue,
+.cp-alpha {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: none;
+}
+.cp-hue {
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+.cp-alpha {
+  background-image:
+    linear-gradient(45deg, #0000004d 25%, transparent 25%, transparent 75%, #0000004d 75%),
+    linear-gradient(45deg, #0000004d 25%, transparent 25%, transparent 75%, #0000004d 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+  background-color: #fff;
+}
+.cp-alpha-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+}
+.cp-slider-thumb {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #0008;
+  pointer-events: none;
+}
+.cp-hex {
+  margin-top: 10px;
+  text-align: center;
+}
+.cp-nums {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.cp-num-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.cp-num {
+  text-align: center;
+  padding: 3px 2px;
+}
+/* schowaj strzałki spinnera w polach liczbowych RGBA */
+.cp-num::-webkit-inner-spin-button,
+.cp-num::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.cp-num-label {
+  font-size: 11px;
+  opacity: 0.7;
 }
 .field-add {
   margin-top: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--vscode-panel-border);
+}
+
+/* ---------- status hosta WPF: kropka + log ---------- */
+.host-dot-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+}
+.host-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25) inset;
+}
+.host-dot.host-ok {
+  background: #2ea043;
+  box-shadow: 0 0 5px #2ea043;
+}
+.host-dot.host-error {
+  background: #f04747;
+  box-shadow: 0 0 5px #f04747;
+}
+.host-dot.host-inactive {
+  background: #555;
+}
+.host-dot.host-idle {
+  background: #d2a000;
+  box-shadow: 0 0 5px #d2a000;
+}
+.host-dot.has-res {
+  outline: 2px solid #3794ff; /* niebieski pierścień: aktywne zasoby (web/WPF, też z innego okna) */
+  outline-offset: 2px;
+}
+#host-log-overlay,
+#resources-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+#resources-panel {
+  margin-top: 48px;
+  min-width: 380px;
+  max-width: 560px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: 12px 14px;
+  overflow: auto;
+}
+.res-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.res-row .res-kind {
+  opacity: 0.6;
+  font-size: 11px;
+}
+.res-lang {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+  flex-wrap: wrap;
+}
+.res-reflect {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  font-size: 12px;
+  opacity: 0.9;
+  cursor: pointer;
+}
+.res-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.res-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  font-size: 13px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 4px;
+  cursor: pointer;
+  background: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.18));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+}
+.res-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.28));
+}
+.res-btn.primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+.res-btn.primary:hover {
+  background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+.res-btn .codicon {
+  font-size: 16px;
+}
+#host-log-panel {
+  margin-top: 48px;
+  min-width: 380px;
+  max-width: 560px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: 12px 14px;
+}
+/* konsola błędu zadokowana na dole obszaru podglądu (#preview-pane) — pod projektem/zmianami */
+#host-console-dock {
+  display: none;
+}
+#host-console-dock.visible {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  max-height: 40%;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  padding: 6px 10px 8px;
+  overflow: hidden;
+}
+/* konsola debug (telemetria renderu) — zadokowana na dole obszaru podglądu, jak konsola błędu */
+#debug-console-dock {
+  display: none;
+}
+#debug-console-dock.visible {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  max-height: 40%;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  padding: 6px 10px 8px;
+  overflow: hidden;
+}
+#debug-console-dock .host-log {
+  flex: 1;
+  min-height: 0;
+}
+.tool-field-dual {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.tool-field-dual .tool-num {
+  width: 48px;
+}
+.debug-live-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.debug-live-toggle input {
+  margin: 0;
+}
+.host-dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.host-dock-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 12px;
+}
+.host-dock-actions {
+  display: flex;
+  gap: 4px;
+}
+#host-console-dock .host-log {
+  flex: 1;
+  min-height: 0;
+}
+.host-log {
+  margin-top: 8px;
+  overflow: auto;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+}
+.host-log-row {
+  padding: 3px 6px;
+  white-space: pre-wrap;
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.host-log-error {
+  border-left-color: #f04747;
+  color: var(--vscode-errorForeground, #f04747);
+}
+.host-log-ok {
+  border-left-color: #2ea043;
+}
+.host-log-info {
+  border-left-color: var(--vscode-panel-border);
+  opacity: 0.95;
+}
+.host-log-clickable {
+  cursor: pointer;
+}
+.host-log-clickable:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+.host-status-line {
+  font-weight: 600;
+}
+/* sekcja zasobów projektu (nad zakładkami) */
+.host-resources {
+  margin-top: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.host-resources .pane-subtitle {
+  margin: 0 0 4px;
+}
+/* zakładki Console / Log */
+.host-tabs {
+  display: flex;
+  gap: 2px;
+  margin-top: 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.host-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--vscode-foreground);
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.host-tab:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+}
+.host-tab.active {
+  border-bottom-color: var(--vscode-focusBorder, #007acc);
+  font-weight: 600;
+}
+.host-tab-body {
+  margin-top: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.host-fix-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 /* ---------- panel ustawień ---------- */
@@ -620,6 +2164,45 @@ body {
   opacity: 0.7;
   margin-top: 4px;
 }
+/* zwijany podpanel „Zaawansowane — host WPF" */
+.settings-advanced {
+  margin-top: 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+  padding-top: 6px;
+}
+.settings-advanced > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  padding: 4px 0;
+  list-style: revert;
+}
+.settings-advanced[open] > summary {
+  margin-bottom: 6px;
+}
+/* etykieta select w sekcji ustawień */
+.settings-section > .field-name {
+  margin-bottom: 4px;
+}
+/* przycisk „Otwórz ustawienia rozszerzenia" — na dole panelu Ustawień */
+.settings-open-ext {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 5px 10px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  color: var(--vscode-button-secondaryForeground, #fff);
+  font: inherit;
+  cursor: pointer;
+}
+.settings-open-ext:hover {
+  background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
 
 /* ---------- widok Changes ---------- */
 #changes-view {
@@ -629,7 +2212,6 @@ body {
   overflow: auto;
   padding: 6px 10px;
 }
-#preview-pane.mode-changes #preview-tools,
 #preview-pane.mode-changes #preview-viewport {
   display: none;
 }
@@ -648,21 +2230,72 @@ body {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--vscode-panel-border);
 }
-.change-row {
+/* karty zmian (port BuildChangeCard z aplikacji WPF) */
+.change-card {
+  border: 1px solid var(--vscode-panel-border);
+  border-left-width: 3px;
+  border-radius: 4px;
+  padding: 6px 10px 8px;
+  margin-bottom: 10px;
+}
+.change-card-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 4px;
-  border-left: 2px solid transparent;
+  justify-content: space-between;
+  gap: 8px;
 }
-.change-row:hover {
-  background: var(--vscode-list-hoverBackground);
+.change-title {
+  font-weight: 600;
 }
-.change-label {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.change-title.clickable {
+  cursor: pointer;
+}
+.change-title.clickable:hover {
+  text-decoration: underline;
+}
+.change-revert {
+  flex: 0 0 auto;
+}
+.change-summary {
+  margin-top: 4px;
+  opacity: 0.8;
+  font-size: 11px;
+}
+.diff-line {
+  margin-top: 5px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+.diff-line .diff-sign {
+  font-weight: bold;
+}
+.diff-old {
+  background: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.12));
+}
+.diff-new {
+  background: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.12));
+}
+.diff-moved {
+  color: #006bb3;
+}
+/* podświetlenia per atrybut */
+.diff-old .hl-removed {
+  text-decoration: line-through;
+}
+.diff-old .hl-changed {
+  text-decoration: underline;
+}
+.diff-new .hl-added,
+.diff-new .hl-changed {
+  text-decoration: underline;
+  font-weight: bold;
+}
+.hl-changed {
+  text-decoration: underline;
 }
 .ch-attrs {
   border-left-color: var(--vscode-editorWarning-foreground, #cca700);
@@ -673,8 +2306,8 @@ body {
 .ch-removed {
   border-left-color: var(--vscode-gitDecoration-deletedResourceForeground, #c33);
 }
-.ch-sign {
-  font-weight: bold;
+.ch-moved {
+  border-left-color: #006bb3;
 }
 
 /* sekcja Prowadnice w panelu właściwości */
@@ -719,4 +2352,418 @@ body {
   background: var(--vscode-statusBar-background, transparent);
   color: var(--vscode-statusBar-foreground, inherit);
   min-height: 16px;
+}
+
+/* ---------- menu kontekstowe (PPM) ---------- */
+.ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 180px;
+  padding: 4px 0;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background, #252526));
+  color: var(--vscode-menu-foreground, var(--vscode-foreground, #ccc));
+  border: 1px solid var(--vscode-menu-border, var(--vscode-editorWidget-border, #454545));
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+  font-size: 13px;
+  user-select: none;
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ctx-item:hover:not(.disabled):not(.ctx-header) {
+  background: var(--vscode-menu-selectionBackground, #04395e);
+  color: var(--vscode-menu-selectionForeground, #fff);
+}
+.ctx-item.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ctx-item.ctx-header {
+  opacity: 0.7;
+  cursor: default;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ctx-check {
+  flex: 0 0 auto;
+  width: 14px;
+  text-align: center;
+}
+.ctx-label {
+  flex: 1 1 auto;
+}
+.ctx-hint {
+  margin-left: 24px;
+  opacity: 0.65;
+  font-size: 11px;
+}
+.ctx-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--vscode-menu-separatorBackground, #454545);
+}
+
+/* ---------- nowe kontrolki (Etap: rozbudowa elementów) ---------- */
+/* ListBox / ListView */
+.xve-listbox {
+  display: block;
+  background: var(--xve-field-bg);
+  border: 1px solid var(--xve-field-border);
+  color: var(--xve-field-fg);
+  border-radius: var(--xve-radius);
+  align-items: stretch;
+}
+.xve-listitem {
+  padding: 3px 8px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.xve-listitem.xve-item-current {
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 28%, transparent);
+}
+.xve-listitem.xve-item-selected {
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 22%, transparent);
+}
+
+/* TreeView */
+.xve-treeview {
+  display: block;
+  background: var(--xve-field-bg);
+  border: 1px solid var(--xve-field-border);
+  color: var(--xve-field-fg);
+  border-radius: var(--xve-radius);
+  align-items: stretch;
+}
+.xve-treeitem-head {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.xve-treeitem-chevron {
+  font-size: 9px;
+  width: 10px;
+  opacity: 0.7;
+}
+.xve-treeitem-head.xve-item-selected {
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 22%, transparent);
+}
+
+/* GroupBox */
+.xve-groupbox {
+  border: 1px solid var(--xve-btn-border, #888);
+  border-radius: var(--xve-radius);
+  padding: 2px;
+  box-sizing: border-box;
+}
+.xve-groupbox-header {
+  position: absolute;
+  top: -8px;
+  left: 8px;
+  padding: 0 4px;
+  font-size: 12px;
+  background: var(--xve-win-bg, var(--vscode-editor-background));
+}
+.xve-groupbox-body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Expander */
+.xve-expander {
+  border: 1px solid var(--xve-btn-border, #888);
+  border-radius: var(--xve-radius);
+  box-sizing: border-box;
+}
+.xve-expander-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--xve-btn-bg, transparent);
+  border-bottom: 1px solid var(--xve-btn-border, #888);
+}
+.xve-expander-chevron {
+  font-size: 10px;
+  opacity: 0.8;
+}
+.xve-expander-body {
+  overflow: hidden;
+  padding: 2px;
+}
+
+/* ToolBar / StatusBar */
+.xve-toolbar {
+  gap: 0;
+  padding: 2px;
+  background: var(--xve-btn-bg, transparent);
+  /* WPF ToolBar nie ma ramki — chrom to grip (10px) i przycisk overflow (14px), części szablonu */
+  border: none;
+  border-radius: var(--xve-radius);
+  box-sizing: border-box;
+}
+/* grip ToolBaru (kropkowana pionowa rączka, jak w WPF); min-height wymusza wysokość paska
+   w motywach Fluent (WPF: ~49px), nie ograniczając centrowania pozostałych dzieci */
+.xve-toolbar-grip {
+  flex: none;
+  width: 10px;
+  align-self: stretch;
+  min-height: var(--xve-toolbar-minh, 0px);
+  background: radial-gradient(circle, color-mix(in srgb, currentColor 40%, transparent) 1px, transparent 1.2px) 4px center / 3px 4px repeat-y;
+}
+/* przycisk overflow przy prawej krawędzi (chevron na dole, jak w WPF) */
+.xve-toolbar-overflow {
+  flex: none;
+  width: 14px;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 3px;
+  opacity: 0.55;
+}
+.xve-toolbar-overflow::after {
+  content: "⌄";
+  font-size: 9px;
+  line-height: 1;
+}
+/* przyciski w ToolBarze są płaskie (WPF ToolBar.ButtonStyleKey): bez tła/ramki, ciasny padding */
+.xve-toolbar .xve-button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  padding: 2px;
+  min-height: 0;
+}
+/* Fluent nadaje przyciskom ciemniejszą dolną krawędź — w ToolBarze też ma być płasko */
+#surface.xve-theme-light .xve-toolbar .xve-button,
+#surface.xve-theme-dark .xve-toolbar .xve-button {
+  background: transparent;
+  border-color: transparent;
+  min-height: 0;
+}
+/* Fluent: tekstowy przycisk w ToolBarze ma szeroki padding (WPF ~13px); przycisk z ikoną
+   (dzieckiem-elementem, np. TextBlock z glifem) zostaje ciasny 24×24 */
+#surface.xve-theme-light .xve-toolbar .xve-button:not(:has(.xve-el)),
+#surface.xve-theme-dark .xve-toolbar .xve-button:not(:has(.xve-el)) {
+  padding: 2px 13px;
+  /* WPF Fluent: tekstowy przycisk paska wypełnia jego wysokość (ikonowe zostają 24×24);
+     height (nie align-self) — inline align-self:center z renderera by wygrał */
+  height: 46px;
+}
+/* Fluent: TabControl bez ramki (treść zaczyna się przy krawędzi, jak w hoście) */
+#surface.xve-theme-light .xve-tabcontrol,
+#surface.xve-theme-dark .xve-tabcontrol {
+  border: none;
+}
+.xve-statusbar {
+  gap: 0;
+  /* WPF StatusBar: bez ramki/paddingu — odstępy dają StatusBarItem (padding 3px) */
+  padding: 0;
+  background: var(--xve-btn-bg, transparent);
+  box-sizing: border-box;
+  font-size: 12px;
+}
+/* StatusBarItem: domyślny padding 3px jak w WPF (treść wyśrodkowana w pionie) */
+.xve-statusbaritem {
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+/* ToggleButton wciśnięty */
+.xve-button.xve-toggled {
+  background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 30%, var(--xve-btn-bg, transparent));
+  border-color: var(--vscode-focusBorder, #007acc);
+}
+
+/* DatePicker */
+.xve-datepicker {
+  justify-content: space-between;
+  gap: 6px;
+  background: var(--xve-field-bg);
+  border: 1px solid var(--xve-field-border);
+  color: var(--xve-field-fg);
+  border-radius: var(--xve-radius);
+  padding: 2px 6px;
+}
+.xve-datepicker-text {
+  flex: 1;
+  font-size: 12px;
+  overflow: hidden;
+}
+.xve-datepicker-icon {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* Calendar */
+.xve-calendar {
+  /* WPF Calendar zajmuje stały SLOT układu (classic 179×265, Fluent 296×348 — zmienne motywu),
+     ale w classic WIDOCZNY chrom (box) jest kompaktowy (~160px) u góry slotu; Fluent wypełnia go
+     w całości. Jawne Width/Height z XAML wygrywają inline'em. */
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: var(--xve-calendar-w, 179px);
+  height: var(--xve-calendar-h, 265px);
+}
+#surface.xve-theme-light,
+#surface.xve-theme-dark {
+  --xve-calendar-w: 296px;
+  --xve-calendar-h: 348px;
+  --xve-calendar-boxh: 100%;
+}
+.xve-calendar-box {
+  display: flex;
+  flex-direction: column;
+  background: var(--xve-field-bg);
+  border: 1px solid var(--xve-field-border);
+  color: var(--xve-field-fg);
+  border-radius: var(--xve-radius);
+  padding: 4px;
+  box-sizing: border-box;
+  height: var(--xve-calendar-boxh, auto);
+}
+.xve-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  /* classic: jasnoniebieski pas nagłówka (jak Aero2, #e6ecf1) dochodzi do ramki */
+  margin: -4px -4px 4px;
+  padding: 3px 8px;
+  background: var(--xve-cal-head-bg, #e6ecf1);
+}
+.xve-calendar-nav {
+  font-size: 9px;
+  opacity: 0.7;
+}
+.xve-calendar-prev::before {
+  content: var(--xve-cal-prev, "◀");
+}
+.xve-calendar-next::before {
+  content: var(--xve-cal-next, "▶");
+}
+.xve-calendar-title {
+  flex: 1;
+  text-align: center;
+}
+.xve-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  /* classic: naturalne wysokości wierszy (kompaktowo); Fluent nadpisuje na 1fr (wypełnia box) */
+  grid-auto-rows: auto;
+  flex: 1;
+  gap: 1px;
+}
+#surface.xve-theme-light .xve-calendar-grid,
+#surface.xve-theme-dark .xve-calendar-grid {
+  grid-auto-rows: 1fr;
+}
+/* Fluent: nagłówek bez pasa, tytuł po lewej, nawigacja ▲▼ po prawej (jak WinUI);
+   bez linii pod dniami tygodnia i bez przygaszania dni sąsiednich miesięcy */
+#surface.xve-theme-light .xve-calendar-head,
+#surface.xve-theme-dark .xve-calendar-head {
+  background: transparent;
+  margin: 0 0 4px;
+  padding: 6px 8px;
+  font-size: 14px; /* Fluent: tytuł kalendarza 14px (jak treść okna) */
+}
+/* Fluent: dni tygodnia i numery dni to 14px (WPF dziedziczy 14 z okna; classic zostaje 11px) */
+#surface.xve-theme-light .xve-calendar-cell,
+#surface.xve-theme-dark .xve-calendar-cell {
+  font-size: 14px;
+}
+#surface.xve-theme-light .xve-calendar-dow,
+#surface.xve-theme-dark .xve-calendar-dow {
+  border-bottom: none;
+}
+#surface.xve-theme-light .xve-calendar-adjacent,
+#surface.xve-theme-dark .xve-calendar-adjacent {
+  opacity: 1;
+}
+#surface.xve-theme-light .xve-calendar-title,
+#surface.xve-theme-dark .xve-calendar-title {
+  order: -1;
+  text-align: left;
+}
+#surface.xve-theme-light .xve-calendar-nav,
+#surface.xve-theme-dark .xve-calendar-nav {
+  margin-left: 14px;
+}
+#surface.xve-theme-light,
+#surface.xve-theme-dark {
+  --xve-cal-prev: "▲";
+  --xve-cal-next: "▼";
+}
+.xve-calendar-cell {
+  text-align: center;
+  font-size: 11px;
+  padding: 0;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.xve-calendar-dow {
+  font-weight: 600;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+.xve-calendar-adjacent {
+  opacity: 0.55; /* WPF classic: dni sąsiednich miesięcy ~#777 na białym */
+}
+.xve-calendar-selected {
+  background: var(--xve-accent);
+  color: var(--xve-mark-on-accent, #fff);
+  border-radius: var(--xve-check-radius, 0);
+}
+
+/* GridSplitter */
+.xve-gridsplitter {
+  background: color-mix(in srgb, currentColor 25%, transparent);
+  cursor: col-resize;
+  min-width: 3px;
+  min-height: 3px;
+}
+
+/* Separator (samodzielny, poza menu) */
+.xve-separator {
+  background: color-mix(in srgb, currentColor 30%, transparent);
+  min-height: 1px;
+  min-width: 1px;
+}
+/* Separator w poziomym rzędzie (ToolBar/StatusBar): pionowa kreska na wysokość rzędu.
+   Marginesy per kontener/motyw wg metryk hosta WPF (renderer zdejmuje inline'owy margin). */
+.xve-separator-v {
+  min-width: 1px;
+  max-width: 1px;
+  margin: 2px;
+}
+.xve-toolbar > .xve-separator-v {
+  margin: 4.5px 2px;
+}
+#surface.xve-theme-light .xve-toolbar > .xve-separator-v,
+#surface.xve-theme-dark .xve-toolbar > .xve-separator-v {
+  margin: 1.5px 0;
+}
+#surface.xve-theme-light .xve-statusbar .xve-separator-v,
+#surface.xve-theme-dark .xve-statusbar .xve-separator-v {
+  margin: 0 6px;
+}
+
+/* kształty SVG (Line/Polygon/Polyline) */
+.xve-shape-svg {
+  overflow: visible;
 }

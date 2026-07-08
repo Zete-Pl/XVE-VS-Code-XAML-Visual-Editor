@@ -1,0 +1,14 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Font metrics" Width="420" Height="420">
+	<!-- Auto-wysokość TextBlocków zależy od metryk czcionki (line-height). Web ma stałą wysokość linii,
+	     WPF używa LineSpacing czcionki. Różne FontSize/FontWeight/FontFamily ujawniają rozjazd wysokości. -->
+	<StackPanel Margin="12">
+		<TextBlock Text="FontSize 11" FontSize="11" />
+		<TextBlock Text="FontSize 14" FontSize="14" />
+		<TextBlock Text="FontSize 20" FontSize="20" />
+		<TextBlock Text="FontSize 28 Bold" FontSize="28" FontWeight="Bold" />
+		<TextBlock Text="Segoe UI 16" FontFamily="Segoe UI" FontSize="16" />
+		<TextBlock Text="Consolas 16" FontFamily="Consolas" FontSize="16" />
+		<TextBlock Text="Italic 18" FontSize="18" FontStyle="Italic" />
+		<TextBlock FontSize="14">Tekst<LineBreak />w dwóch liniach przez LineBreak</TextBlock>
+	</StackPanel>
+</Window>

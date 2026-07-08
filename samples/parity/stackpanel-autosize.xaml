@@ -1,0 +1,20 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="StackPanel autosize" Width="420" Height="320">
+	<!-- StackPanel dobiera rozmiar w osi głównej do sumy dzieci (+ marginesy), a w poprzecznej
+	     do najszerszego dziecka. Border opakowujący sizuje się do treści — dobre źródło rozjazdów. -->
+	<StackPanel Margin="12">
+		<Border Background="#FFB0C4DE" HorizontalAlignment="Left">
+			<StackPanel Orientation="Vertical">
+				<TextBlock Text="Wiersz 1" />
+				<TextBlock Text="Wiersz drugi, dłuższy" />
+				<TextBlock Text="3" />
+			</StackPanel>
+		</Border>
+		<Border Background="#FF90EE90" HorizontalAlignment="Left" Margin="0,12,0,0">
+			<StackPanel Orientation="Horizontal">
+				<Button Content="A" Margin="0,0,6,0" />
+				<Button Content="BB" Margin="0,0,6,0" />
+				<Button Content="CCC" />
+			</StackPanel>
+		</Border>
+	</StackPanel>
+</Window>

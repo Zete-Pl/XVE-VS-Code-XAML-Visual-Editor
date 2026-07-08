@@ -1,96 +1,85 @@
-# XAML Visual Editor (XVE) — wtyczka VS Code
+# XAML Visual Editor (XVE) — VS Code extension
 
-Wizualny edytor plików XAML wewnątrz VS Code. Port koncepcji z aplikacji desktopowej
-WPF [XamlVisualEditor](../XamlVisualEditor) — z naciskiem na **wierny ("surgical") zapis**:
-edycja zmienia wyłącznie to, co trzeba, a reszta pliku pozostaje bajt-w-bajt nietknięta.
+A visual editor for hand-written **XAML** files inside VS Code — a structure tree, a live
+preview and a typed properties panel — with a defining feature: **surgical save**. An edit
+changes only what it must; the rest of the file stays byte-for-byte identical (formatting,
+comments and indentation are preserved).
 
-> Osobne repozytorium. Aplikacja WPF służy jako referencja zachowań, nie współdzielimy kodu.
+> 📖 **Full documentation:** [🇬🇧 English](docs/en/DOCUMENTATION.md) · [🇵🇱 Polski](docs/pl/DOKUMENTACJA.md)
+> &nbsp;·&nbsp; *(Español, Deutsch, Français, 日本語, 中文 — planned)*
 
-## Status — Etap 6 (zoom + host WPF + ustawienia)
+![Editor layout](docs/images/layout-overview.png)
 
-Zrobione:
-- **Zoom** (oba tryby): kontrolka **− / % / + / Dopasuj** w pasku oraz **Ctrl+scroll**
-  (z zakotwiczeniem na kursorze); zakres 10–800%. Linijki/snap/prowadnice respektują zoom.
-- **Host WPF** (`wpf-host/`, .NET 10): `xve-wpf-host.exe` renderuje XAML **prawdziwym silnikiem
-  WPF** → PNG + mapa hit‑test (`x:Uid`). Protokół JSON‑lines.
-- **Wydajność hosta**: trwała sesja przeciągania (cache drzewa), koalescencja in‑flight,
-  **render tylko widocznego obszaru** (`viewbox`, 1:1, ostro niezależnie od rozmiaru okna),
-  konfigurowalny **limit rozdzielczości**.
-- **Panel Ustawień** (⚙): wybór silnika (Auto / Web / WPF host — host tylko Windows) oraz
-  opcje trybu host (strategia podglądu przeciągania, trwała sesja, koalescencja, realny
-  rozmiar, limit rozdzielczości, render widocznego obszaru).
-- **Domyślnie**: render widocznego obszaru + podgląd przeciągania „co 25 ms" (wł.).
-- Ikona wtyczki: `Assets/iconXVE2.ico` (przy publikacji do Marketplace wymagany PNG 128×128).
-- Budowa hosta: `npm run build:host` (wymaga .NET 10 SDK, Windows).
+## Requirements
 
-Wcześniej — Etap 4 (diff / Changes):
-- **`LineDiff`** (LCS) i **`StructuralDiff`** (dopasowanie drzew keyed‑LCS po tag + x:Name)
-  w TS — porty z aplikacji WPF, czyste i otestowane.
-- **Widok Changes** (przełącznik Design/Changes w pasku, licznik): lista zmian względem
-  **zapisanego pliku** — zmiany atrybutów, dodane i usunięte elementy — z **revert per‑hunk**
-  oraz **Revert all**. Klik w pozycję zaznacza element w podglądzie.
-- Revert chirurgiczny przez te same operacje co edycja (set/remove/insert/delete),
-  Revert all = przywrócenie tekstu baseline.
+- **VS Code** `^1.90`.
+- The cross-platform **web renderer** works out of the box on Windows, macOS and Linux —
+  nothing else to install.
+- The high-fidelity **WPF preview host** is optional and Windows-only (**x64 and ARM64**; a native
+  app host ships for each). Nothing to compile — but it needs the
+  **[.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)** installed, in the
+  same architecture as your VS Code. Note this is the *Desktop* runtime, a separate download from
+  the plain .NET runtime. Without it XVE falls back to the web renderer and tells you why.
 
-Wcześniej — Etap 3 (edycja wizualna):
-- **Edycja wizualna w podglądzie**: przeciąganie elementu (move → `Margin` lub `Canvas.Left/Top`
-  wg layoutu rodzica), 8 uchwytów **resize** (z aktualizacją `Width/Height` i `Margin`),
-  podgląd na żywo podczas gestu, commit jednym chirurgicznym zapisem (`setAttributes`).
-- **Operacje strukturalne** w `XamlDocument`: `removeElement`, `insertChild`, `moveElement`,
-  `getElementSource` (zachowanie wcięć/formatowania).
-- **Pasek narzędzi**: dodawanie elementu (lista typów + domyślne snippety) do zaznaczonego
-  kontenera, usuwanie. **Skróty**: Delete, Ctrl+C / Ctrl+V (kopiuj/wklej poddrzewo).
-- **3b — linijki, prowadnice, snap**: linijki (góra/lewo) z podziałką, **prowadnice** dodawane
-  klikiem w linijkę (przeciąganie / podwójny klik = usuń), **snap‑grid** o konfigurowalnym
-  kroku (move/resize przyciąga do siatki i prowadnic), opcjonalna **widoczna siatka**,
-  pasek **narzędzi Select / Pan**.
-- **3b‑rebuild — stabilny viewport**: układ podglądu przepisany — `#surface-scroll` jest
-  `position:absolute; inset:0` (rozmiar niezależny od linijek), linijki to paski **CSS/DOM**
-  (podziałka = gradient, etykiety = DOM; bez canvas/DPI), `ResizeObserver` przerysowuje przy
-  zmianie rozmiaru okna. Działają **scrollbary** (Window > widok) i **Pan** (narzędzie + środkowy
-  przycisk myszy). Przełączniki Linijki/Prowadnice stabilne. Zoom: planowany na Etap 6.
+## Features
 
-Wcześniej:
-- Custom Text Editor dla `*.xaml` (webview: drzewo struktury, podgląd, panel właściwości).
-- Rdzeń `XamlDocument` + pozycyjny tokenizer `XamlParser` z chirurgiczną edycją atrybutów.
-- **Web renderer** subsetu XAML→DOM (`renderer.ts`): Window/Grid/Canvas/StackPanel/Border,
-  TextBlock/Button/TextBox/CheckBox/RadioButton/Slider/ProgressBar/Image/Ellipse/Rectangle;
-  nieznane typy → placeholder. Pozycjonowanie wg Margin/Alignment/Canvas.*, kolory `#AARRGGBB`.
-- **Dwukierunkowa selekcja**: klik w podglądzie ↔ podświetlenie w drzewie + nakładka zaznaczenia.
-- **Typowany panel właściwości** (`TypeRegistry`): bool→select, enum→lista, brush→próbnik koloru,
-  number/thickness/string→pole; **dodawanie** (lista znanych właściwości) i **usuwanie** atrybutów;
-  **podświetlenie atrybutów zmienionych** względem zapisanego pliku + **revert** per atrybut.
-- Port lokalizacji (7 języków, `[en, pl, es, de, fr, ja, zh]`).
-- Edycja w panelu → chirurgiczny zapis przez `WorkspaceEdit` (natywne undo/redo).
-- Testy round-trip / surgical-save / konwersji kolorów / TypeRegistry (`npm run test:unit`, 17/17).
+- **Visual editing** — select, drag-to-move (`Margin` / `Canvas.*`) and resize (8 handles) with
+  a live preview; everything committed as one surgical write.
+- **Structure tree** with drag-to-reorder, and a **typed properties panel** (bool, enum, brush,
+  number, thickness, string) with add/remove and per-attribute revert.
+- **Changes view** — a diff against the saved file (changed / added / removed / moved elements)
+  with revert-per-hunk and Revert-all.
+- **Two preview engines** — a cross-platform **web renderer** (including `{StaticResource}`,
+  `Style`/`Setter`, `BasedOn` chains and implicit styles) and a Windows-only, high-fidelity
+  **WPF host** (real WPF engine, themes, HiDPI supersampling, custom-control resources).
+- **Zoom** 10–800 % (Ctrl+scroll, Fit), rulers, guides and snap-to-grid.
+- **Two-way selection sync** with a side-by-side text editor, and a **localized UI** (7 languages).
 
-Plan kolejnych etapów: zobacz dokument planu migracji.
+See the [full documentation](docs/en/DOCUMENTATION.md) for a complete tour of every feature,
+the settings reference and the architecture.
 
-## Architektura (skrót)
-
-```
-Extension host (Node/TS)            Webview (HTML/CSS/TS)
-  extension.ts                        main.ts  — drzewo, źródło, properties
-  XveEditorProvider  ── postMessage ─ style.css
-  core/XamlDocument  (surgical save)
-  core/XamlParser    (tokenizer + offsety)
-  core/Localization  (7 języków)
-```
-
-Backend podglądu w kolejnych etapach: **web renderer** (cross-platform) oraz opcjonalny
-**WPF host** na Windows (wysoka wierność).
-
-## Uruchomienie (dev)
+## Quick start (dev)
 
 ```bash
 npm install
-npm run compile        # bundla extension + webview do dist/
-npm run test:unit      # testy rdzenia (Node test runner, type stripping)
+npm run compile        # bundles the extension + webview into dist/
+npm run test:unit      # core unit tests (Node test runner, type stripping)
+npm run test:parity    # web renderer vs WPF host rendering parity (Playwright)
 ```
 
-W VS Code: `F5` → „Run Extension" → w nowym oknie otwórz dowolny `.xaml`
-(albo „XVE: Open in XAML Visual Editor").
+In VS Code press **`F5`** → *Run Extension*, then in the new window open any `.xaml` file (or run
+**“XVE: Open in XAML Visual Editor”**). On Windows, build the high-fidelity preview host with
+`npm run build:host` (this one requires the .NET 10 **SDK**, not just the runtime).
 
-## Wymagania
+Regenerate the documentation images (diagrams and toolbar icons) with `npm run docs:images`.
 
-- VS Code ^1.90, Node ≥ 20 (testy używają type-stripping z Node ≥ 22/24).
+## Architecture (overview)
+
+```
+Extension host (Node/TS)                  Webview (HTML/CSS/TS)
+  extension.ts                              main.ts         — tree, source, properties
+  XveEditorProvider    ── postMessage ───   renderer.ts     — web XAML→DOM
+  core/XamlDocument    (surgical save)      styleResolver.ts— XAML styles → CSS
+  core/XamlParser      (tokenizer + offsets)style.css
+  core/StructuralDiff  (LCS tree diff)
+  core/TypeRegistry    (types + properties)
+  core/ResourceModel   (brushes, styles, BasedOn)
+  core/ProjectScanner  (csproj → DLLs, dictionaries)
+  core/PasteNames      (x:Name deduplication)
+  core/Localization    (7 languages)
+  host/WpfHost   ───── JSON-lines over stdio ───▶ wpf-host (Windows, .NET 10)
+                                                  real WPF → PNG + hit-test
+```
+
+More detail — including diagrams of the architecture and the edit flow — is in the
+[full documentation](docs/en/DOCUMENTATION.md#11-architecture).
+
+## Related project
+
+The WPF desktop application [**XamlVisualEditor**](https://github.com/Zete-Pl/XamlVisualEditor)
+is a separate repository. It serves as a behavioral reference for this extension; no code is
+shared between the two.
+
+## License
+
+[Apache License 2.0](LICENSE).
