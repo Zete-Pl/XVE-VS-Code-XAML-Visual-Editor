@@ -2,7 +2,7 @@
   "name": "xve-vscode",
   "displayName": "XAML Visual Editor (XVE)",
   "description": "Visual editor for hand-written XAML files — structure tree, live preview and surgical save, inside VS Code.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "Zete",
   "icon": "Assets/iconXVE128.png",
   "license": "Apache-2.0",
@@ -23,8 +23,7 @@
   },
   "categories": [
     "Visualization",
-    "Programming Languages",
-    "Other"
+    "Programming Languages"
   ],
   "keywords": [
     "xaml",
