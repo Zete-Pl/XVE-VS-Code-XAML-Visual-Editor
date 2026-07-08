@@ -5,10 +5,16 @@ preview and a typed properties panel — with a defining feature: **surgical sav
 changes only what it must; the rest of the file stays byte-for-byte identical (formatting,
 comments and indentation are preserved).
 
-> 📖 **Full documentation:** [🇬🇧 English](docs/en/DOCUMENTATION.md) · [🇵🇱 Polski](docs/pl/DOKUMENTACJA.md)
-> &nbsp;·&nbsp; *(Español, Deutsch, Français, 日本語, 中文 — planned)*
+> 📖 **Full documentation:**
+> [🇬🇧 English](docs/en/DOCUMENTATION.md) ·
+> [🇵🇱 Polski](docs/pl/DOKUMENTACJA.md) ·
+> [🇪🇸 Español](docs/es/DOCUMENTACION.md) ·
+> [🇩🇪 Deutsch](docs/de/DOKUMENTATION.md) ·
+> [🇫🇷 Français](docs/fr/DOCUMENTATION.md) ·
+> [🇯🇵 日本語](docs/ja/DOCUMENTATION.md) ·
+> [🇨🇳 中文](docs/zh/DOCUMENTATION.md)
 
-![Editor layout](docs/images/layout-overview.png)
+![Editor layout](docs/images/layout-overview.gif)
 
 ## Requirements
 
