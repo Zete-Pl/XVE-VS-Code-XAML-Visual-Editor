@@ -1,9 +1,6 @@
 # XAML Visual Editor (XVE) — Documentation
 
-**🇬🇧 English** · [🇵🇱 Polski](../pl/DOKUMENTACJA.md)
-
-> Other languages (Español, Deutsch, Français, 日本語, 中文) are planned and will be added as
-> translations of this document.
+**🇬🇧 English** · [🇵🇱 Polski](../pl/DOKUMENTACJA.md) · [🇪🇸 Español](../es/DOCUMENTACION.md) · [🇩🇪 Deutsch](../de/DOKUMENTATION.md) · [🇫🇷 Français](../fr/DOCUMENTATION.md) · [🇯🇵 日本語](../ja/DOCUMENTATION.md) · [🇨🇳 中文](../zh/DOCUMENTATION.md)
 
 XVE is a Visual Studio Code extension that turns hand-written **XAML** files into a live,
 editable visual surface — a structure tree, a rendered preview, and a typed properties
@@ -599,6 +596,8 @@ the visible region, at a reduced resolution while you move. If it is still heavy
 `xve.preview.motionResolution` (e.g. to 384), or raise `xve.preview.adaptiveFpsThreshold` so the
 low-resolution mode engages sooner. Setting it to `0` always uses the motion resolution while
 moving. Leave `dragStrategy` at `ms`.
+
+---
 
 ## 14. Development history
 

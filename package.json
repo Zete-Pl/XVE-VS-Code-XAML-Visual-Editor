@@ -387,6 +387,7 @@
     "build:host:dist": "dotnet publish wpf-host -c Release -r win-x64 --self-contained false -o wpf-host/dist/win-x64 && dotnet publish wpf-host -c Release -r win-arm64 --self-contained false -o wpf-host/dist/win-arm64",
     "vscode:prepublish": "node esbuild.mjs --production",
     "docs:images": "node tools/docs/render-images.mjs",
+    "docs:check": "node tools/docs/check-links.mjs",
     "package": "npm run build:host:dist && vsce package",
     "publish": "npm run build:host:dist && vsce publish",
     "test:unit": "node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/*.test.ts",
