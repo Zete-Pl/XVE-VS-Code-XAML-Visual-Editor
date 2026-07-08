@@ -187,6 +187,53 @@ test("toTree: czysty tekst (bez elementów inline) nie tworzy inlines", () => {
   assert.equal(tb.text, "Sam tekst");
 });
 
+test("toTree: encje w treści tekstowej są dekodowane (parytet z wartościami atrybutów)", () => {
+  // regresja: renderer robi createTextNode(text), więc surowe `&amp;` wyświetlało się dosłownie
+  const doc = new XamlDocument(`<Window xmlns="x"><TextBlock>a &amp; b &lt;c&gt; &#39;d&#39;</TextBlock></Window>`);
+  const tb = doc.toTree()!.children.find((c) => c.tag === "TextBlock")!;
+  assert.equal(tb.text, "a & b <c> 'd'");
+});
+
+test("toTree: encje w mieszanej treści inline są dekodowane", () => {
+  const doc = new XamlDocument(
+    `<Window xmlns="x"><TextBlock>a &amp; b<LineBreak />c &lt; d</TextBlock></Window>`
+  );
+  const tb = doc.toTree()!.children.find((c) => c.tag === "TextBlock")!;
+  assert.deepEqual(tb.inlines!.map((p) => ("text" in p ? p.text : p.node.tag)), [
+    "a & b",
+    "LineBreak",
+    "c < d",
+  ]);
+});
+
+test("toTree: encje nie są dekodowane dwukrotnie", () => {
+  // `&amp;lt;` to literalny tekst `&lt;`, a nie znak `<`
+  const doc = new XamlDocument(`<Window xmlns="x"><TextBlock>&amp;lt; &amp;amp;</TextBlock></Window>`);
+  const tb = doc.toTree()!.children.find((c) => c.tag === "TextBlock")!;
+  assert.equal(tb.text, "&lt; &amp;");
+});
+
+test("toTree: segment czysto-biały z encji (&#32;) nie tworzy wpisu w inlines", () => {
+  const doc = new XamlDocument(`<Window xmlns="x"><TextBlock>x<LineBreak />&#32;</TextBlock></Window>`);
+  const tb = doc.toTree()!.children.find((c) => c.tag === "TextBlock")!;
+  assert.deepEqual(tb.inlines!.map((p) => ("text" in p ? p.text : p.node.tag)), ["x", "LineBreak"]);
+});
+
+test("toTree: dekodowanie encji nie rusza dokumentu (chirurgiczny zapis)", () => {
+  const src = `<Window xmlns="x"><TextBlock Text="p &amp; q">a &amp; b</TextBlock></Window>`;
+  const doc = new XamlDocument(src);
+  doc.toTree();
+  assert.equal(doc.getText(), src, "toTree() jest tylko odczytem — tekst źródłowy bez zmian");
+
+  // edycja atrybutu nie może „przepisać" encji w treści tekstowej elementu
+  const tbId = doc.toTree()!.children.find((c) => c.tag === "TextBlock")!.id;
+  doc.setAttribute(tbId, "Width", "10");
+  const out = doc.getText();
+  assert.ok(out.includes(`>a &amp; b</TextBlock>`), `treść nadal zakodowana, a jest: ${out}`);
+  assert.ok(out.includes(`Text="p &amp; q"`), "atrybut nietknięty przez edycję sąsiada");
+  assert.ok(out.includes(`Width="10"`), "edycja faktycznie się zaaplikowała");
+});
+
 // helper
 import type { XamlNode } from "../src/core/XamlParser.ts";
 function findByTag(doc: XamlDocument, tag: string): XamlNode | undefined {

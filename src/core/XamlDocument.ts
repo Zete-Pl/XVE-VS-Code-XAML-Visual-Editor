@@ -5,7 +5,7 @@
 // "faithful / surgical save". Drzewo węzłów (XamlNode) ma offsety w oryginale, więc po
 // edycji wciąż wskazuje poprawne miejsca (edycje aplikujemy od końca).
 
-import { XamlParser, encodeXmlAttr } from "./XamlParser.ts";
+import { XamlParser, encodeXmlAttr, decodeXml } from "./XamlParser.ts";
 import type { XamlNode } from "./XamlParser.ts";
 
 interface Edit {
@@ -305,13 +305,21 @@ export class XamlDocument {
     return this.getText();
   }
 
-  /** Drzewo do webview: tylko elementy (text/comment pomijamy w widoku struktury). */
+  /**
+   * Drzewo do webview: tylko elementy (text/comment pomijamy w widoku struktury).
+   *
+   * Encje (`&amp;`, `&lt;`, `&#39;`…) rozwiązujemy **wyłącznie tutaj**, w DTO widoku — tak samo,
+   * jak XamlParser robi to dla wartości atrybutów. Dokument trzyma oryginalny tekst i edytuje go
+   * po offsetach, więc żadna zdekodowana wartość nigdy nie wraca do pliku i chirurgiczny zapis
+   * pozostaje bajt-w-bajt wierny.
+   */
   toTree(): TreeNodeDto | null {
     if (!this.root) return null;
+    const decoded = (c: XamlNode): string => decodeXml(c.raw ?? "");
     const map = (n: XamlNode): TreeNodeDto => {
       const text = n.children
         .filter((c) => c.kind === "text")
-        .map((c) => c.raw ?? "")
+        .map(decoded)
         .join("")
         .trim();
       const dto: TreeNodeDto = {
@@ -325,10 +333,8 @@ export class XamlDocument {
       // KOLEJNOŚĆ w `inlines` — `text` (sklejony) i `children` osobno gubią pozycję tekstu.
       if (text && dto.children.length) {
         dto.inlines = n.children
-          .filter((c) => c.kind === "element" || (c.kind === "text" && (c.raw ?? "").trim() !== ""))
-          .map((c) =>
-            c.kind === "text" ? { text: (c.raw ?? "").replace(/\s+/g, " ") } : { node: map(c) }
-          );
+          .filter((c) => c.kind === "element" || (c.kind === "text" && decoded(c).trim() !== ""))
+          .map((c) => (c.kind === "text" ? { text: decoded(c).replace(/\s+/g, " ") } : { node: map(c) }));
       }
       return dto;
     };
